@@ -76,6 +76,29 @@ async function waitForTracking(node, code) {
   throw new Error(`Inquiry ${code} did not replicate to ${node.base}`);
 }
 
+async function stopNode(node) {
+  if (node.child.exitCode !== null) return;
+  const exited = once(node.child, "exit").catch(() => undefined);
+  node.child.kill("SIGTERM");
+  await Promise.race([exited, delay(3_000)]);
+  if (node.child.exitCode === null) node.child.kill("SIGKILL");
+}
+
+async function waitForOutboxState(dbPath, inquiryId, peerNodeId, condition, expectedState) {
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    const find = db.prepare("SELECT attempt_count AS attemptCount FROM sync_outbox WHERE inquiry_id = ? AND peer_node_id = ?");
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const row = find.get(inquiryId, peerNodeId);
+      if (condition(row)) return row;
+      await delay(100);
+    }
+    throw new Error(`Outbox did not reach ${expectedState} for ${inquiryId} -> ${peerNodeId}`);
+  } finally {
+    db.close();
+  }
+}
+
 const portA = await allocatePort();
 const portB = await allocatePort();
 const portC = await allocatePort();
@@ -238,7 +261,68 @@ try {
   });
   assert.equal(disabledSync.status, 503);
 
-  console.log("API smoke tests passed: local API, validation, rate limits, peer replication, idempotency, conflict quarantine, no overwrite, sync auth, and sync-off default.");
+  const recoverySourcePort = await allocatePort();
+  const recoveryTargetPort = await allocatePort();
+  const recoverySourceDbPath = path.join(tempDir, "recovery-source.sqlite");
+  const recoveryTargetDbPath = path.join(tempDir, "recovery-target.sqlite");
+  const recoveryPeerId = "web-recovery-target";
+  const recoveryPeers = `${recoveryPeerId}=http://127.0.0.1:${recoveryTargetPort}`;
+  const recoverySource = startNode({
+    nodeId: "web-recovery-source",
+    port: recoverySourcePort,
+    dbPath: recoverySourceDbPath,
+    peers: recoveryPeers,
+    sharedSecret: secret,
+  });
+  await waitForHealth(recoverySource);
+  const offlineCreateResponse = await fetch(`${recoverySource.base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+  assert.equal(offlineCreateResponse.status, 201);
+  const offlineCreated = await offlineCreateResponse.json();
+  const sourceRecordDb = new Database(recoverySourceDbPath, { readonly: true });
+  const sourceRecord = sourceRecordDb.prepare("SELECT id FROM inquiries WHERE tracking_code = ?").get(offlineCreated.trackingCode);
+  sourceRecordDb.close();
+  assert(sourceRecord);
+  const failedAttempt = await waitForOutboxState(
+    recoverySourceDbPath,
+    sourceRecord.id,
+    recoveryPeerId,
+    (row) => row?.attemptCount >= 1,
+    "a persisted failed attempt",
+  );
+  assert.ok(failedAttempt.attemptCount >= 1);
+  await stopNode(recoverySource);
+
+  const recoveryTarget = startNode({
+    nodeId: recoveryPeerId,
+    port: recoveryTargetPort,
+    dbPath: recoveryTargetDbPath,
+    sharedSecret: secret,
+    trackLimit: 100,
+  });
+  await waitForHealth(recoveryTarget);
+  const restartedSource = startNode({
+    nodeId: "web-recovery-source",
+    port: recoverySourcePort,
+    dbPath: recoverySourceDbPath,
+    peers: recoveryPeers,
+    sharedSecret: secret,
+  });
+  await waitForHealth(restartedSource);
+  const recoveredTracking = await waitForTracking(recoveryTarget, offlineCreated.trackingCode);
+  assert.equal(recoveredTracking.data.productName, products[0].name);
+  await waitForOutboxState(
+    recoverySourceDbPath,
+    sourceRecord.id,
+    recoveryPeerId,
+    (row) => !row,
+    "successful delivery and outbox removal",
+  );
+
+  console.log("API smoke tests passed: local API, validation, rate limits, peer replication, conflict safety, offline outbox recovery after restart, sync auth, and sync-off default.");
 } finally {
   for (const node of processes) {
     if (node.child.exitCode === null) {
