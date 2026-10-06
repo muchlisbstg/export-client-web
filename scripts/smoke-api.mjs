@@ -29,6 +29,8 @@ const server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
     DB_PATH: dbPath,
     NODE_ENV: "test",
     WEB_ORIGINS: "http://localhost:5173",
+    RFQ_LIMIT_PER_15M: "3",
+    TRACK_LOOKUP_LIMIT_PER_15M: "3",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -62,6 +64,13 @@ try {
   });
   assert.equal(invalidResponse.status, 400);
 
+  const missingProductResponse = await fetch(`${base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ customerName: "Sample Client", customerEmail: "client@example.com", destinationCountry: "Japan", productId: "missing-product", quantity: 1000 }),
+  });
+  assert.equal(missingProductResponse.status, 404);
+
   const requestBody = {
     customerName: "Sample Client",
     customerEmail: "client@example.com",
@@ -78,6 +87,13 @@ try {
   const created = await createdResponse.json();
   assert.match(created.trackingCode, /^[A-F0-9]{24}$/);
 
+  const rateLimitedRfq = await fetch(`${base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+  assert.equal(rateLimitedRfq.status, 429);
+
   const trackedResponse = await fetch(`${base}/api/v1/inquiries/${created.trackingCode}`);
   assert.equal(trackedResponse.status, 200);
   const tracked = (await trackedResponse.json()).data;
@@ -91,7 +107,10 @@ try {
   const missingRequestResponse = await fetch(`${base}/api/v1/inquiries/${"F".repeat(24)}`);
   assert.equal(missingRequestResponse.status, 404);
 
-  console.log("API smoke tests passed: health, catalog, validation, RFQ creation, cross-client tracking, and PII omission.");
+  const rateLimitedLookup = await fetch(`${base}/api/v1/inquiries/${created.trackingCode}`);
+  assert.equal(rateLimitedLookup.status, 429);
+
+  console.log("API smoke tests passed: health, catalog, validation, RFQ creation, cross-client tracking, PII omission, and request limits.");
 } finally {
   if (server.exitCode === null) {
     const exited = once(server, "exit").catch(() => undefined);

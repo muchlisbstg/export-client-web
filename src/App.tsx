@@ -65,6 +65,7 @@ export default function App() {
       });
       const result = (await response.json()) as { trackingCode?: string; error?: string };
       if (!response.ok || !result.trackingCode) {
+        if (result.error === "rate_limit_exceeded") throw new Error("Batas permintaan tercapai. Coba lagi beberapa menit lagi.");
         throw new Error(result.error === "product_not_found" ? "Produk tidak ditemukan." : "Periksa kembali data permintaan.");
       }
       setTrackingCode(result.trackingCode);
@@ -86,6 +87,7 @@ export default function App() {
       const response = await fetch(`/api/v1/inquiries/${encodeURIComponent(code)}`);
       const result = (await response.json()) as { data?: InquiryStatus; error?: string };
       if (!response.ok || !result.data) {
+        if (result.error === "rate_limit_exceeded") throw new Error("Batas pelacakan tercapai. Coba lagi beberapa menit lagi.");
         throw new Error(result.error === "inquiry_not_found" ? "Permintaan tidak ditemukan." : "Kode pelacakan tidak valid.");
       }
       setTrackedInquiry(result.data);
