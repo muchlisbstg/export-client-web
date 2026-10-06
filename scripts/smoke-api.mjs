@@ -322,7 +322,75 @@ try {
     "successful delivery and outbox removal",
   );
 
-  console.log("API smoke tests passed: local API, validation, rate limits, peer replication, conflict safety, offline outbox recovery after restart, sync auth, and sync-off default.");
+  const hopPortA = await allocatePort();
+  const hopPortB = await allocatePort();
+  const hopPortC = await allocatePort();
+  const hopDbPaths = {
+    a: path.join(tempDir, "hop-a.sqlite"),
+    b: path.join(tempDir, "hop-b.sqlite"),
+    c: path.join(tempDir, "hop-c.sqlite"),
+  };
+  const hopNodeA = startNode({
+    nodeId: "web-hop-a",
+    port: hopPortA,
+    dbPath: hopDbPaths.a,
+    peers: `web-hop-b=http://127.0.0.1:${hopPortB}`,
+    sharedSecret: secret,
+    trackLimit: 100,
+  });
+  const hopNodeB = startNode({
+    nodeId: "web-hop-b",
+    port: hopPortB,
+    dbPath: hopDbPaths.b,
+    peers: `web-hop-a=http://127.0.0.1:${hopPortA},web-hop-c=http://127.0.0.1:${hopPortC}`,
+    sharedSecret: secret,
+    trackLimit: 100,
+  });
+  const hopNodeC = startNode({
+    nodeId: "web-hop-c",
+    port: hopPortC,
+    dbPath: hopDbPaths.c,
+    peers: `web-hop-b=http://127.0.0.1:${hopPortB}`,
+    sharedSecret: secret,
+    trackLimit: 100,
+  });
+  await Promise.all([waitForHealth(hopNodeA), waitForHealth(hopNodeB), waitForHealth(hopNodeC)]);
+
+  const hopCreateResponse = await fetch(`${hopNodeA.base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...requestBody, customerName: "Three Node Client" }),
+  });
+  assert.equal(hopCreateResponse.status, 201);
+  const hopCreated = await hopCreateResponse.json();
+  const hopSourceDb = new Database(hopDbPaths.a, { readonly: true });
+  const hopSourceRecord = hopSourceDb.prepare("SELECT id FROM inquiries WHERE tracking_code = ?").get(hopCreated.trackingCode);
+  hopSourceDb.close();
+  assert(hopSourceRecord);
+
+  const hopAtB = await waitForTracking(hopNodeB, hopCreated.trackingCode);
+  const hopAtC = await waitForTracking(hopNodeC, hopCreated.trackingCode);
+  assert.equal(hopAtB.data.productName, products[0].name);
+  assert.equal(hopAtC.data.productName, products[0].name);
+
+  await waitForOutboxState(hopDbPaths.a, hopSourceRecord.id, "web-hop-b", (row) => !row, "delivery to middle peer");
+  await waitForOutboxState(hopDbPaths.b, hopSourceRecord.id, "web-hop-c", (row) => !row, "forwarding to final peer");
+  await waitForOutboxState(hopDbPaths.c, hopSourceRecord.id, "web-hop-b", (row) => !row, "duplicate echo acknowledgement");
+
+  for (const [label, dbPath] of Object.entries(hopDbPaths)) {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      const stored = db.prepare("SELECT COUNT(*) AS count, MIN(origin_node_id) AS originNodeId FROM inquiries WHERE id = ?").get(hopSourceRecord.id);
+      assert.equal(stored.count, 1, `${label} must store exactly one copy of the inquiry`);
+      assert.equal(stored.originNodeId, "web-hop-a", `${label} must preserve the original node ID`);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sync_outbox WHERE inquiry_id = ?").get(hopSourceRecord.id).count, 0, `${label} outbox must drain`);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sync_conflicts WHERE inquiry_id = ?").get(hopSourceRecord.id).count, 0, `${label} must not record a conflict`);
+    } finally {
+      db.close();
+    }
+  }
+
+  console.log("API smoke tests passed: local API, validation, rate limits, peer replication, conflict safety, offline outbox recovery after restart, three-node forwarding without loops, sync auth, and sync-off default.");
 } finally {
   for (const node of processes) {
     if (node.child.exitCode === null) {
