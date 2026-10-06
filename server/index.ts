@@ -5,16 +5,30 @@ import cors from "cors";
 import { rateLimit } from "express-rate-limit";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { createDatabase, type Product } from "./database";
+import { createDatabase, type InquiryRecord, type Product } from "./database";
+import { createSyncCoordinator, isValidSyncSecret, matchesSyncSecret, parseSyncPeers } from "./sync";
 
 const db = createDatabase();
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
+const host = process.env.API_HOST ?? "0.0.0.0";
 const allowedOrigins = (process.env.WEB_ORIGINS ?? "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
+const syncSecret = process.env.SYNC_SHARED_SECRET?.trim() ?? "";
+const nodeId = process.env.SYNC_NODE_ID?.trim() || "web-local";
+
+if (syncSecret && !isValidSyncSecret(syncSecret)) {
+  throw new Error("SYNC_SHARED_SECRET must contain at least 32 characters.");
+}
+if (syncSecret && !process.env.SYNC_NODE_ID?.trim()) {
+  throw new Error("SYNC_NODE_ID is required when SYNC_SHARED_SECRET enables synchronization.");
+}
+
+const peers = parseSyncPeers(process.env.SYNC_PEERS ?? "", nodeId);
+const sync = createSyncCoordinator({ db, nodeId, secret: syncSecret, peers });
 
 app.disable("x-powered-by");
 if (Number.isSafeInteger(trustProxyHops) && trustProxyHops >= 0) {
@@ -58,16 +72,28 @@ const inquiryInput = z.object({
   quantity: z.coerce.number().positive().max(1_000_000),
 });
 
+const syncInquiryInput = z.object({
+  id: z.string().uuid(),
+  trackingCode: z.string().regex(/^[A-F0-9]{24}$/),
+  customerName: z.string().min(2).max(120),
+  customerEmail: z.string().email().max(254),
+  destinationCountry: z.string().min(2).max(80),
+  productId: z.string().min(1).max(80),
+  quantity: z.number().positive().max(1_000_000),
+  unit: z.string().min(1).max(20),
+  status: z.literal("received"),
+  createdAt: z.string().datetime({ offset: true }),
+  originNodeId: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/),
+}).strict();
+
 app.get("/health", (_request, response) => {
   db.prepare("SELECT 1").get();
-  response.json({ status: "ok" });
+  response.json({ status: "ok", nodeId, syncEnabled: sync.syncEnabled });
 });
 
 app.get("/api/v1/products", (_request, response) => {
   const products = db
-    .prepare(
-      "SELECT id, name, category, origin, unit FROM products WHERE active = 1 ORDER BY name"
-    )
+    .prepare("SELECT id, name, category, origin, unit FROM products WHERE active = 1 ORDER BY name")
     .all() as Product[];
   response.setHeader("Cache-Control", "no-store");
   response.json({ data: products });
@@ -83,30 +109,72 @@ app.post("/api/v1/inquiries", createInquiryLimiter, (request, response) => {
   }
 
   const product = db
-    .prepare("SELECT id FROM products WHERE id = ? AND active = 1")
-    .get(parsed.data.productId);
+    .prepare("SELECT id, unit FROM products WHERE id = ? AND active = 1")
+    .get(parsed.data.productId) as { id: string; unit: string } | undefined;
   if (!product) return response.status(404).json({ error: "product_not_found" });
 
-  const trackingCode = randomBytes(12).toString("hex").toUpperCase();
-  const createdAt = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO inquiries
-      (id, tracking_code, customer_name, customer_email, destination_country, product_id, quantity, unit, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received', ?)`
-  ).run(
-    randomUUID(),
+  let trackingCode = "";
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = randomBytes(12).toString("hex").toUpperCase();
+    const exists = db.prepare("SELECT 1 FROM inquiries WHERE tracking_code = ?").get(candidate);
+    if (!exists) {
+      trackingCode = candidate;
+      break;
+    }
+  }
+  if (!trackingCode) return response.status(503).json({ error: "tracking_code_unavailable" });
+
+  const record: InquiryRecord = {
+    id: randomUUID(),
     trackingCode,
-    parsed.data.customerName,
-    parsed.data.customerEmail,
-    parsed.data.destinationCountry,
-    parsed.data.productId,
-    parsed.data.quantity,
-    "kg",
-    createdAt
+    customerName: parsed.data.customerName,
+    customerEmail: parsed.data.customerEmail,
+    destinationCountry: parsed.data.destinationCountry,
+    productId: parsed.data.productId,
+    quantity: parsed.data.quantity,
+    unit: product.unit,
+    status: "received",
+    createdAt: new Date().toISOString(),
+    originNodeId: nodeId,
+  };
+  db.prepare(`
+    INSERT INTO inquiries
+      (id, tracking_code, customer_name, customer_email, destination_country, product_id, quantity, unit, status, created_at, origin_node_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    record.id,
+    record.trackingCode,
+    record.customerName,
+    record.customerEmail,
+    record.destinationCountry,
+    record.productId,
+    record.quantity,
+    record.unit,
+    record.status,
+    record.createdAt,
+    record.originNodeId
   );
+  sync.queueRecord(record.id, record.originNodeId);
 
   response.setHeader("Cache-Control", "no-store");
-  return response.status(201).json({ trackingCode, status: "received", createdAt });
+  return response.status(201).json({ trackingCode, status: record.status, createdAt: record.createdAt });
+});
+
+app.post("/api/v1/sync/inquiries", (request, response) => {
+  if (!syncSecret) return response.status(503).json({ error: "sync_disabled" });
+  if (!matchesSyncSecret(request.header("authorization"), syncSecret)) {
+    return response.status(401).json({ error: "unauthorized" });
+  }
+
+  const parsed = syncInquiryInput.safeParse(request.body);
+  if (!parsed.success) return response.status(400).json({ error: "invalid_sync_record" });
+
+  const result = sync.receive(parsed.data, parsed.data.originNodeId);
+  if (result.result === "product_not_found") return response.status(404).json({ error: "product_not_found" });
+  if (result.result === "conflict") {
+    return response.status(409).json({ error: "sync_conflict", ...result });
+  }
+  return response.status(result.result === "inserted" ? 201 : 200).json({ result: result.result });
 });
 
 app.get("/api/v1/inquiries/:trackingCode", trackInquiryLimiter, (request, response) => {
@@ -116,11 +184,11 @@ app.get("/api/v1/inquiries/:trackingCode", trackInquiryLimiter, (request, respon
   }
 
   const inquiry = db
-    .prepare(
-      `SELECT i.status, i.created_at AS createdAt, p.name AS productName
-       FROM inquiries i JOIN products p ON p.id = i.product_id
-       WHERE i.tracking_code = ?`
-    )
+    .prepare(`
+      SELECT i.status, i.created_at AS createdAt, p.name AS productName
+      FROM inquiries i JOIN products p ON p.id = i.product_id
+      WHERE i.tracking_code = ?
+    `)
     .get(trackingCode) as
     | { status: string; createdAt: string; productName: string }
     | undefined;
@@ -145,6 +213,19 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   response.status(500).json({ error: "internal_server_error" });
 });
 
-app.listen(port, "0.0.0.0", () => {
-  console.log(`Shared export-client API listening on http://0.0.0.0:${port}`);
+const server = app.listen(port, host, () => {
+  console.log(`Web API node ${nodeId} listening on http://${host}:${port}`);
+  sync.start();
 });
+
+function shutdown() {
+  sync.stop();
+  server.close(() => {
+    db.close();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 3_000).unref();
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);

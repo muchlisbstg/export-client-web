@@ -103,14 +103,14 @@ export default function App() {
           <span className="brand-mark">E</span>
           <span>Export<span className="brand-light">Client</span></span>
         </a>
-        <span className="sync-pill"><span className="status-dot" /> API bersama · web + mobile</span>
+        <span className="sync-pill"><span className="status-dot" /> Peer API · web + mobile + desktop</span>
       </header>
 
       <section className="hero" id="top">
         <div className="hero-copy">
           <p className="eyebrow">PORTAL KLIEN EKSPOR</p>
           <h1>Permintaan ekspor,<br /><em>lebih terhubung.</em></h1>
-          <p className="hero-description">Jelajahi katalog demo, ajukan permintaan penawaran, dan lanjutkan pelacakan dari aplikasi web maupun mobile.</p>
+          <p className="hero-description">Jelajahi katalog demo, ajukan permintaan penawaran, dan lanjutkan pelacakan dari web, mobile, maupun desktop.</p>
           <a className="text-link" href="#catalog">Jelajahi katalog <span aria-hidden="true">↓</span></a>
         </div>
         <div className="hero-card" aria-label="Ringkasan produk demo">
@@ -141,7 +141,7 @@ export default function App() {
       <section className="action-grid" id="inquiry">
         <div className="form-panel">
           <div className="section-heading compact"><div><p className="eyebrow">02 — RFQ</p><h2>Ajukan penawaran</h2></div></div>
-          <p className="form-intro">Isi kebutuhan Anda. Permintaan tersimpan di API bersama dan dapat dilacak melalui aplikasi mobile.</p>
+          <p className="form-intro">Isi kebutuhan Anda. Permintaan tersimpan pada backend lokal dan direplikasi ke peer yang dikonfigurasi.</p>
           <form className="form-grid" onSubmit={submitInquiry}>
             <label>Nama lengkap<input required minLength={2} maxLength={120} autoComplete="name" value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} placeholder="Nama Anda" /></label>
             <label>Email kerja<input required type="email" maxLength={254} autoComplete="email" value={form.customerEmail} onChange={(event) => setForm({ ...form, customerEmail: event.target.value })} placeholder="nama@perusahaan.com" /></label>
@@ -150,7 +150,7 @@ export default function App() {
             <label className="full-width">Jumlah (kg)<input required type="number" min="1" max="1000000" step="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} /></label>
             <button className="primary-button full-width" type="submit" disabled={submitting || loading || products.length === 0}>{submitting ? "Mengirim…" : "Kirim permintaan"}<span aria-hidden="true">↗</span></button>
           </form>
-          {trackingCode && <div className="success-box" role="status"><strong>Permintaan tersimpan.</strong><span>Kode pelacakan Anda (simpan untuk digunakan di web atau mobile):</span><code>{trackingCode}</code></div>}
+          {trackingCode && <div className="success-box" role="status"><strong>Permintaan tersimpan.</strong><span>Kode pelacakan Anda (simpan untuk digunakan di web, mobile, atau desktop yang tersinkron):</span><code>{trackingCode}</code></div>}
         </div>
 
         <div className="tracking-panel">
