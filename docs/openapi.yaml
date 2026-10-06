@@ -1,14 +1,17 @@
 openapi: 3.1.0
 info:
-  title: Export Client Shared API
-  version: 1.0.0
-  description: API bersama untuk katalog demo dan permintaan penawaran lintas web/mobile.
+  title: Export Client Peer API
+  version: 2.0.0
+  description: >-
+    API demo untuk tiga backend mandiri (web, mobile, desktop). Inquiry direplikasi
+    secara append-only antar-peer; tidak ada master, update, atau delete.
 servers:
   - url: http://localhost:4000
+    description: Backend web lokal (default)
 paths:
   /health:
     get:
-      summary: Memeriksa kesehatan API dan database
+      summary: Memeriksa kesehatan backend dan database lokal
       responses:
         '200':
           description: API siap
@@ -16,14 +19,17 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [status, nodeId, syncEnabled]
                 properties:
                   status: { type: string, const: ok }
+                  nodeId: { type: string }
+                  syncEnabled: { type: boolean }
   /api/v1/products:
     get:
-      summary: Mendapatkan katalog produk aktif
+      summary: Mendapatkan katalog produk aktif dari database lokal
       responses:
         '200':
-          description: Katalog untuk kedua klien
+          description: Katalog demo lokal
           content:
             application/json:
               schema:
@@ -43,8 +49,10 @@ paths:
                         unit: { type: string }
   /api/v1/inquiries:
     post:
-      summary: Membuat permintaan penawaran baru
-      description: Kode pelacakan yang dikembalikan adalah rahasia pembawa (bearer); simpan dan bagikan hanya kepada pemohon.
+      summary: Membuat inquiry pada database backend lokal
+      description: >-
+        Inquiry baru mendapat ID UUID dan kode pelacakan stabil. Bila sinkronisasi
+        diaktifkan, record append-only disebarkan ke peer yang dikonfigurasi.
       requestBody:
         required: true
         content:
@@ -60,7 +68,7 @@ paths:
                 quantity: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
       responses:
         '201':
-          description: Permintaan dibuat; kode ini juga dapat digunakan di aplikasi mobile
+          description: Inquiry dibuat; kode berlaku pada semua peer setelah direplikasi
           content:
             application/json:
               schema:
@@ -72,11 +80,13 @@ paths:
                   createdAt: { type: string, format: date-time }
         '400': { description: Validasi input gagal }
         '404': { description: Produk tidak ditemukan }
-        '429': { description: Batas permintaan RFQ per 15 menit tercapai }
+        '429': { description: Batas RFQ per 15 menit tercapai }
   /api/v1/inquiries/{trackingCode}:
     get:
-      summary: Melacak status permintaan penawaran
-      description: Memerlukan kode bearer 24 karakter yang didapat saat permintaan dibuat. Respons tidak memuat nama atau email.
+      summary: Melacak status inquiry di database peer lokal
+      description: >-
+        Memerlukan kode bearer 24 karakter. Respons tidak memuat nama atau email.
+        Replication eventual; tunggu sinkronisasi bila inquiry dibuat di peer lain.
       parameters:
         - in: path
           name: trackingCode
@@ -84,7 +94,7 @@ paths:
           schema: { type: string, pattern: '^[A-F0-9]{24}$' }
       responses:
         '200':
-          description: Status permintaan
+          description: Status inquiry lokal
           content:
             application/json:
               schema:
@@ -95,9 +105,66 @@ paths:
                     type: object
                     required: [status, createdAt, productName]
                     properties:
-                      status: { type: string }
+                      status: { type: string, enum: [received] }
                       createdAt: { type: string, format: date-time }
                       productName: { type: string }
         '400': { description: Format kode tidak valid }
-        '404': { description: Permintaan tidak ditemukan }
+        '404': { description: Inquiry belum tiba di peer atau tidak ditemukan }
         '429': { description: Batas lookup per 15 menit tercapai }
+  /api/v1/sync/inquiries:
+    post:
+      summary: Menerima atau mereplikasi record inquiry peer
+      description: >-
+        Endpoint layanan-ke-layanan. Nonaktif bila SYNC_SHARED_SECRET kosong.
+        Record bersifat append-only: ID/kode duplikat identik no-op; isi berbeda
+        menghasilkan 409 dan disimpan sebagai konflik tanpa menimpa record lokal.
+        Gunakan TLS untuk sinkronisasi di luar loopback; jangan kirim data nyata.
+      security:
+        - PeerSyncBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InquiryRecord' }
+      responses:
+        '201': { description: Record baru diterima }
+        '200': { description: Record identik sudah tersimpan }
+        '400': { description: Record tidak valid }
+        '401': { description: Bearer secret tidak sah }
+        '404': { description: Produk demo tidak tersedia pada peer }
+        '409':
+          description: Konflik; record lokal tidak berubah
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, result, existingHash, incomingHash]
+                properties:
+                  error: { type: string, const: sync_conflict }
+                  result: { type: string, const: conflict }
+                  existingHash: { type: string }
+                  incomingHash: { type: string }
+        '503': { description: Sinkronisasi belum diaktifkan di server penerima }
+components:
+  securitySchemes:
+    PeerSyncBearer:
+      type: http
+      scheme: bearer
+      description: Secret antarlayanan minimal 32 karakter; jangan dibundel di klien.
+  schemas:
+    InquiryRecord:
+      type: object
+      additionalProperties: false
+      required: [id, trackingCode, customerName, customerEmail, destinationCountry, productId, quantity, unit, status, createdAt, originNodeId]
+      properties:
+        id: { type: string, format: uuid }
+        trackingCode: { type: string, pattern: '^[A-F0-9]{24}$' }
+        customerName: { type: string, minLength: 2, maxLength: 120 }
+        customerEmail: { type: string, format: email, maxLength: 254 }
+        destinationCountry: { type: string, minLength: 2, maxLength: 80 }
+        productId: { type: string, minLength: 1, maxLength: 80 }
+        quantity: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
+        unit: { type: string, minLength: 1, maxLength: 20 }
+        status: { type: string, enum: [received] }
+        createdAt: { type: string, format: date-time }
+        originNodeId: { type: string, pattern: '^[A-Za-z0-9._-]{1,80}$' }
