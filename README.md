@@ -1,6 +1,6 @@
 # Platform Klien Ekspor — Web
 
-Aplikasi web sekaligus server API bersama untuk [aplikasi mobile](https://github.com/muchlisbstg/export-client-mobile). Kedua klien membaca katalog dan membuat/melacak permintaan penawaran melalui backend yang sama.
+Aplikasi web sekaligus server API bersama untuk [aplikasi mobile](https://github.com/muchlisbstg/export-client-mobile-sync). Kedua klien membaca katalog dan membuat/melacak permintaan penawaran melalui backend yang sama.
 
 ## Jalankan lokal
 
