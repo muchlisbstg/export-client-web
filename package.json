@@ -12,6 +12,11 @@
     "start": "tsx server/index.ts",
     "typecheck": "tsc --noEmit"
   },
+  "overrides": {
+    "concurrently": {
+      "shell-quote": "1.11.0"
+    }
+  },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
