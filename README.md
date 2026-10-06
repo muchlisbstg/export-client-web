@@ -1,25 +1,36 @@
 # Platform Klien Ekspor — Web
 
-Repositori untuk aplikasi web klien ekspor.
+Aplikasi web sekaligus server API bersama untuk [aplikasi mobile](https://github.com/muchlisbstg/export-client-mobile). Kedua klien membaca katalog dan membuat/melacak permintaan penawaran melalui backend yang sama.
 
-**Repo pendamping:** [aplikasi mobile](https://github.com/muchlisbstg/export-client-mobile)
+## Jalankan lokal
 
-## Cakupan produk
+Gunakan Node.js 22 atau lebih baru.
 
-Aplikasi ini ditujukan bagi klien yang menjalankan kegiatan perdagangan ekspor. Cakupan produk mengecualikan pertambangan/ekstraksi, alkohol dan wine, serta produk babi atau turunannya.
+```bash
+npm ci
+cp .env.example .env
+npm run dev
+```
 
-## Integrasi dengan aplikasi mobile
+Frontend tersedia di `http://localhost:5173`, API di `http://localhost:4000`. Database SQLite dibuat otomatis di `data/export-client.sqlite` dan tidak dimasukkan ke Git.
 
-Aplikasi web dan mobile dirancang sebagai dua klien terpisah yang menggunakan **satu backend/API bersama**. Sinkronisasi data pengguna dilakukan melalui backend tersebut—bukan dengan menyinkronkan kode antar-repo atau menghubungkan perangkat secara langsung.
+Untuk menjalankan build web melalui server API:
 
-Agar kedua aplikasi tetap kompatibel:
+```bash
+npm run build
+NODE_ENV=production npm start
+```
 
-- keduanya harus mengacu pada kontrak API dan versi endpoint yang sama;
-- autentikasi dan data bersama dikelola oleh backend;
-- perubahan model data, validasi, paginasi, dan format error perlu diterapkan konsisten pada kedua klien;
-- alamat API dikonfigurasi melalui environment (misalnya `API_BASE_URL`), bukan ditanam di kode;
-- token dan rahasia tidak boleh disimpan di repo.
+Buka `http://localhost:4000`. Server harus memakai penyimpanan disk yang persisten agar data demo tidak hilang ketika layanan dimulai ulang.
 
-## Status
+## Sinkronisasi dengan mobile
 
-Repo saat ini berisi dokumentasi awal saja. Framework web, backend/API, autentikasi, dan implementasi aplikasi belum dipilih atau dibuat. Karena itu, sinkronisasi runtime belum aktif; bagian di atas adalah pola integrasi yang akan digunakan saat implementasi dimulai.
+Kontrak bersama ada di [`docs/openapi.yaml`](docs/openapi.yaml). Produk yang tersedia berasal dari API. Permintaan yang dibuat dari web atau mobile tersimpan pada database yang sama; kode pelacakan 24 karakter dapat digunakan di kedua aplikasi untuk melihat status.
+
+Agar mobile dapat menghubungi server dari emulator atau perangkat fisik, atur `EXPO_PUBLIC_API_URL` di repo mobile ke alamat server yang dapat dijangkau perangkat. Detailnya ada di README repo mobile.
+
+## Cakupan dan keamanan MVP
+
+Seed produk hanya data contoh, bukan penawaran atau ketersediaan nyata. Ruang lingkup produk mengecualikan pertambangan/ekstraksi, alkohol dan wine, serta produk babi atau turunannya.
+
+Kode pelacakan adalah rahasia pembawa: siapa pun yang memilikinya dapat membaca status dan nama produk, tetapi API tidak mengembalikan nama atau email pemohon. Data kontak disimpan lokal di SQLite untuk tindak lanjut, namun MVP ini belum memiliki login, kontrol admin, atau kebijakan retensi. Sebelum menangani transaksi/klien nyata, tambahkan autentikasi, perlindungan spam, pengamanan dan retensi data pribadi, TLS, backup, serta penyimpanan persisten yang sesuai deployment.

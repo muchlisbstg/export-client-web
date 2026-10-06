@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Export Client Shared API
+  version: 1.0.0
+  description: API bersama untuk katalog demo dan permintaan penawaran lintas web/mobile.
+servers:
+  - url: http://localhost:4000
+paths:
+  /health:
+    get:
+      summary: Memeriksa kesehatan API dan database
+      responses:
+        '200':
+          description: API siap
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+  /api/v1/products:
+    get:
+      summary: Mendapatkan katalog produk aktif
+      responses:
+        '200':
+          description: Katalog untuk kedua klien
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, category, origin, unit]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        category: { type: string }
+                        origin: { type: string }
+                        unit: { type: string }
+  /api/v1/inquiries:
+    post:
+      summary: Membuat permintaan penawaran baru
+      description: Kode pelacakan yang dikembalikan adalah rahasia pembawa (bearer); simpan dan bagikan hanya kepada pemohon.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerName, customerEmail, destinationCountry, productId, quantity]
+              properties:
+                customerName: { type: string, minLength: 2, maxLength: 120 }
+                customerEmail: { type: string, format: email, maxLength: 254 }
+                destinationCountry: { type: string, minLength: 2, maxLength: 80 }
+                productId: { type: string }
+                quantity: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
+      responses:
+        '201':
+          description: Permintaan dibuat; kode ini juga dapat digunakan di aplikasi mobile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [trackingCode, status, createdAt]
+                properties:
+                  trackingCode: { type: string, pattern: '^[A-F0-9]{24}$' }
+                  status: { type: string, enum: [received] }
+                  createdAt: { type: string, format: date-time }
+        '400': { description: Validasi input gagal }
+        '404': { description: Produk tidak ditemukan }
+  /api/v1/inquiries/{trackingCode}:
+    get:
+      summary: Melacak status permintaan penawaran
+      description: Memerlukan kode bearer 24 karakter yang didapat saat permintaan dibuat. Respons tidak memuat nama atau email.
+      parameters:
+        - in: path
+          name: trackingCode
+          required: true
+          schema: { type: string, pattern: '^[A-F0-9]{24}$' }
+      responses:
+        '200':
+          description: Status permintaan
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [status, createdAt, productName]
+                    properties:
+                      status: { type: string }
+                      createdAt: { type: string, format: date-time }
+                      productName: { type: string }
+        '400': { description: Format kode tidak valid }
+        '404': { description: Permintaan tidak ditemukan }
