@@ -2,6 +2,7 @@ import "dotenv/config";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import cors from "cors";
+import { rateLimit } from "express-rate-limit";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { createDatabase, type Product } from "./database";
@@ -13,8 +14,12 @@ const allowedOrigins = (process.env.WEB_ORIGINS ?? "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
 
 app.disable("x-powered-by");
+if (Number.isSafeInteger(trustProxyHops) && trustProxyHops >= 0) {
+  app.set("trust proxy", trustProxyHops);
+}
 app.use(
   cors({
     origin(origin, callback) {
@@ -24,6 +29,26 @@ app.use(
   })
 );
 app.use(express.json({ limit: "16kb" }));
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? fallback);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function createRateLimiter(limit: number) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    handler(_request, response) {
+      response.status(429).json({ error: "rate_limit_exceeded" });
+    },
+  });
+}
+
+const createInquiryLimiter = createRateLimiter(positiveIntegerEnv("RFQ_LIMIT_PER_15M", 10));
+const trackInquiryLimiter = createRateLimiter(positiveIntegerEnv("TRACK_LOOKUP_LIMIT_PER_15M", 60));
 
 const inquiryInput = z.object({
   customerName: z.string().trim().min(2).max(120),
@@ -48,7 +73,7 @@ app.get("/api/v1/products", (_request, response) => {
   response.json({ data: products });
 });
 
-app.post("/api/v1/inquiries", (request, response) => {
+app.post("/api/v1/inquiries", createInquiryLimiter, (request, response) => {
   const parsed = inquiryInput.safeParse(request.body);
   if (!parsed.success) {
     return response.status(400).json({
@@ -84,7 +109,7 @@ app.post("/api/v1/inquiries", (request, response) => {
   return response.status(201).json({ trackingCode, status: "received", createdAt });
 });
 
-app.get("/api/v1/inquiries/:trackingCode", (request, response) => {
+app.get("/api/v1/inquiries/:trackingCode", trackInquiryLimiter, (request, response) => {
   const trackingCode = String(request.params.trackingCode ?? "").trim().toUpperCase();
   if (!/^[A-F0-9]{24}$/.test(trackingCode)) {
     return response.status(400).json({ error: "invalid_tracking_code" });

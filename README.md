@@ -12,6 +12,8 @@ cp .env.example .env
 npm run dev
 ```
 
+Jalankan smoke test API dengan `npm test`; tes menggunakan database sementara dan memeriksa validasi, RFQ, pelacakan, serta rate limit.
+
 Frontend tersedia di `http://localhost:5173`, API di `http://localhost:4000`. Database SQLite dibuat otomatis di `data/export-client.sqlite` dan tidak dimasukkan ke Git.
 
 Untuk menjalankan build web melalui server API:
@@ -33,4 +35,6 @@ Agar mobile dapat menghubungi server dari emulator atau perangkat fisik, atur `E
 
 Seed produk hanya data contoh, bukan penawaran atau ketersediaan nyata. Ruang lingkup produk mengecualikan pertambangan/ekstraksi, alkohol dan wine, serta produk babi atau turunannya.
 
-Kode pelacakan adalah rahasia pembawa: siapa pun yang memilikinya dapat membaca status dan nama produk, tetapi API tidak mengembalikan nama atau email pemohon. Data kontak disimpan lokal di SQLite untuk tindak lanjut, namun MVP ini belum memiliki login, kontrol admin, atau kebijakan retensi. Sebelum menangani transaksi/klien nyata, tambahkan autentikasi, perlindungan spam, pengamanan dan retensi data pribadi, TLS, backup, serta penyimpanan persisten yang sesuai deployment.
+API membatasi pembuatan RFQ menjadi 10 request dan lookup menjadi 60 request per 15 menit per IP; nilainya dapat diatur lewat `.env.example`. `TRUST_PROXY_HOPS` default 0. Ubah hanya jika jumlah reverse proxy tepercaya diketahui tepat, agar alamat klien tidak mudah dipalsukan untuk melewati batas. Limiter memakai memori per proses: reset saat server dimulai ulang, tidak berbagi hitungan antar-instance, dan pengguna di balik NAT yang sama berbagi kuota. Untuk multi-instance perlu shared store. Ini mengurangi spam, tetapi bukan pengganti autentikasi.
+
+Kode pelacakan adalah rahasia pembawa: siapa pun yang memilikinya dapat membaca status dan nama produk, tetapi API tidak mengembalikan nama atau email pemohon. Data kontak disimpan lokal di SQLite untuk tindak lanjut, namun MVP ini belum memiliki login, kontrol admin, atau kebijakan retensi. Jangan gunakan untuk transaksi/klien nyata sebelum autentikasi, pengamanan dan retensi data pribadi, TLS, backup, serta penyimpanan persisten yang sesuai deployment tersedia.

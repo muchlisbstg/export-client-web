@@ -72,6 +72,7 @@ paths:
                   createdAt: { type: string, format: date-time }
         '400': { description: Validasi input gagal }
         '404': { description: Produk tidak ditemukan }
+        '429': { description: Batas permintaan RFQ per 15 menit tercapai }
   /api/v1/inquiries/{trackingCode}:
     get:
       summary: Melacak status permintaan penawaran
@@ -99,3 +100,4 @@ paths:
                       productName: { type: string }
         '400': { description: Format kode tidak valid }
         '404': { description: Permintaan tidak ditemukan }
+        '429': { description: Batas lookup per 15 menit tercapai }
