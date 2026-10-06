@@ -209,6 +209,21 @@ try {
   assert.equal(storedName, "Sample Client", "conflict must never overwrite the original record");
   assert.equal(conflictCount, 1);
 
+  const collisionId = "33333333-3333-4333-8333-333333333333";
+  const codeCollisionResponse = await fetch(`${nodeB.base}/api/v1/sync/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+    body: JSON.stringify({ ...record, id: collisionId, customerName: "Tracking Code Collision" }),
+  });
+  assert.equal(codeCollisionResponse.status, 409);
+  assert.equal((await codeCollisionResponse.json()).error, "sync_conflict");
+  const collisionDb = new Database(nodeB.dbPath, { readonly: true });
+  const collision = collisionDb.prepare("SELECT reason FROM sync_conflicts WHERE inquiry_id = ?").get(collisionId);
+  const preservedName = collisionDb.prepare("SELECT customer_name FROM inquiries WHERE id = ?").get(record.id).customer_name;
+  collisionDb.close();
+  assert.equal(collision.reason, "tracking_code_collision");
+  assert.equal(preservedName, "Sample Client", "tracking-code collision must not overwrite the original record");
+
   const invalidCodeResponse = await fetch(`${nodeA.base}/api/v1/inquiries/not-a-code`);
   assert.equal(invalidCodeResponse.status, 400);
   const missingRequestResponse = await fetch(`${nodeA.base}/api/v1/inquiries/${"F".repeat(24)}`);
