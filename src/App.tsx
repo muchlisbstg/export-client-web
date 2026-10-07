@@ -25,6 +25,7 @@ const initialForm = {
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [catalogError, setCatalogError] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
@@ -41,6 +42,7 @@ export default function App() {
   async function loadProducts() {
     setLoading(true);
     setError("");
+    setCatalogError("");
     try {
       const response = await fetch("/api/v1/products");
       if (!response.ok) throw new Error("Katalog belum dapat dimuat.");
@@ -48,7 +50,7 @@ export default function App() {
       setProducts(result.data);
       setForm((current) => ({ ...current, productId: current.productId || result.data[0]?.id || "" }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "API tidak dapat dihubungi.");
+      setCatalogError(caught instanceof Error ? caught.message : "API tidak dapat dihubungi.");
     } finally {
       setLoading(false);
     }
@@ -142,7 +144,12 @@ export default function App() {
           <div><p className="eyebrow">01 — KATALOG</p><h2>Produk pilihan</h2></div>
           <p className="section-note">Data contoh untuk pengembangan awal.<br />Konfirmasi ketersediaan sebelum transaksi.</p>
         </div>
-        {loading ? <p className="quiet-message">Memuat katalog…</p> : products.length === 0 ? <p className="quiet-message">Katalog kosong.</p> : (
+        {loading ? <p className="quiet-message">Memuat katalog…</p> : catalogError ? (
+          <div className="catalog-load-error" role="alert">
+            <div><strong>Katalog tidak dapat dimuat</strong><p>{catalogError}</p></div>
+            <button type="button" onClick={() => void loadProducts()}>Coba lagi</button>
+          </div>
+        ) : products.length === 0 ? <p className="quiet-message">Katalog kosong.</p> : (
           <>
             <div className="catalog-controls" aria-label="Pencarian dan filter katalog">
               <div className="catalog-search-row">
