@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { filterProducts, getCategories } from "./catalog";
+import { catalogSortOptions, filterProducts, getCategories, sortProducts, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 
 type Product = {
   id: string;
@@ -27,6 +27,8 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
+  const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ export default function App() {
     void loadProducts();
   }, []);
 
-  const visibleProducts = filterProducts(products, catalogQuery, selectedCategory);
+  const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory), catalogSortField, catalogSortDirection);
   const categories = getCategories(products);
   const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "";
 
@@ -171,6 +173,29 @@ export default function App() {
                       onClick={() => setSelectedCategory(category)}
                     >{category || "Semua"}</button>
                   ))}
+                </div>
+              </div>
+              <div className="catalog-filter-row">
+                <span className="catalog-filter-label">Urutkan</span>
+                <div className="catalog-chips" role="group" aria-label="Urutkan produk">
+                  {catalogSortOptions.map(({ field, label }) => (
+                    <button
+                      className="catalog-chip"
+                      key={field}
+                      type="button"
+                      aria-pressed={catalogSortField === field}
+                      onClick={() => { setCatalogSortField(field); setCatalogSortDirection("asc"); }}
+                    >{label}</button>
+                  ))}
+                  {catalogSortField !== "default" && (
+                    <button
+                      className="catalog-chip"
+                      type="button"
+                      aria-pressed={catalogSortDirection === "desc"}
+                      aria-label={`Urutan ${catalogSortDirection === "asc" ? "A sampai Z" : "Z sampai A"}; ubah ke ${catalogSortDirection === "asc" ? "Z sampai A" : "A sampai Z"}`}
+                      onClick={() => setCatalogSortDirection((direction) => direction === "asc" ? "desc" : "asc")}
+                    >{catalogSortDirection === "asc" ? "A–Z" : "Z–A"}</button>
+                  )}
                 </div>
               </div>
             </div>
