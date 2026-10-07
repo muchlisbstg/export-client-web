@@ -271,6 +271,16 @@ try {
   assert.equal(rateLimitedLookup.status, 429);
 
   const peersOnlyPort = await allocatePort();
+  const ipv6PeerPort = await allocatePort();
+  const ipv6LoopbackNode = startNode({
+    nodeId: "web-ipv6-loopback",
+    port: await allocatePort(),
+    dbPath: path.join(tempDir, "web-ipv6-loopback.sqlite"),
+    peers: `web-ipv6-target=http://[::1]:${ipv6PeerPort}`,
+    sharedSecret: secret,
+  });
+  await waitForHealth(ipv6LoopbackNode);
+
   for (const partialConfig of [
     { nodeId: "web-secret-only", sharedSecret: secret },
     { nodeId: "web-peers-only", peers: `web-peer-target=http://127.0.0.1:${peersOnlyPort}` },

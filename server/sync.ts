@@ -62,7 +62,7 @@ export function parseSyncPeers(raw: string, localNodeId: string): SyncPeer[] {
     if (!(url.protocol === "http:" || url.protocol === "https:") || url.username || url.password || url.search || url.hash) {
       throw new Error(`Peer URL for ${nodeId} must be HTTP(S) without credentials, query, or fragment.`);
     }
-    const loopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+    const loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
     if (url.protocol === "http:" && !loopback) {
       throw new Error(`Peer ${nodeId} must use HTTPS unless it is a loopback development URL.`);
     }
