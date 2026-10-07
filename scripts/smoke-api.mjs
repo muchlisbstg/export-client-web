@@ -132,6 +132,22 @@ try {
   assert.equal(healthB.syncEnabled, true);
   assert.equal(healthC.syncEnabled, false);
 
+  const malformedJson = await fetch(`${nodeA.base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: '{"customerName":',
+  });
+  assert.equal(malformedJson.status, 400);
+  assert.equal((await malformedJson.json()).error, "invalid_json");
+
+  const oversizedJson = await fetch(`${nodeA.base}/api/v1/inquiries`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ padding: "x".repeat(17 * 1024) }),
+  });
+  assert.equal(oversizedJson.status, 413);
+  assert.equal((await oversizedJson.json()).error, "payload_too_large");
+
   const productsResponse = await fetch(`${nodeA.base}/api/v1/products`);
   assert.equal(productsResponse.status, 200);
   const products = (await productsResponse.json()).data;

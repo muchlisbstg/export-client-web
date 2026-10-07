@@ -209,6 +209,13 @@ if (process.env.NODE_ENV === "production") {
 }
 
 app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+  const parserError = error as { type?: unknown } | null;
+  if (parserError?.type === "entity.parse.failed") {
+    return response.status(400).json({ error: "invalid_json" });
+  }
+  if (parserError?.type === "entity.too.large") {
+    return response.status(413).json({ error: "payload_too_large" });
+  }
   console.error("API request failed:", error);
   response.status(500).json({ error: "internal_server_error" });
 });
