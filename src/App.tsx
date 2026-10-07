@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { filterProducts, getCategories } from "./catalog";
 
 type Product = {
   id: string;
@@ -24,6 +25,9 @@ const initialForm = {
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const catalogSearchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -51,6 +55,16 @@ export default function App() {
   useEffect(() => {
     void loadProducts();
   }, []);
+
+  const visibleProducts = filterProducts(products, catalogQuery, selectedCategory);
+  const categories = getCategories(products);
+  const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "";
+
+  function resetCatalogFilters() {
+    setCatalogQuery("");
+    setSelectedCategory("");
+    catalogSearchRef.current?.focus();
+  }
 
   async function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,14 +141,62 @@ export default function App() {
           <p className="section-note">Data contoh untuk pengembangan awal.<br />Konfirmasi ketersediaan sebelum transaksi.</p>
         </div>
         {loading ? <p className="quiet-message">Memuat katalog…</p> : products.length === 0 ? <p className="quiet-message">Katalog kosong.</p> : (
-          <div className="product-grid">
-            {products.map((product, index) => (
-              <article className="product-card" key={product.id}>
-                <div className={`product-art art-${index % 3}`}><span className="product-number">0{index + 1}</span><span className="product-stamp">{product.origin}</span></div>
-                <div className="product-details"><span className="product-category">{product.category}</span><h3>{product.name}</h3><p>Asal {product.origin} <span>·</span> Satuan {product.unit}</p></div>
-              </article>
-            ))}
-          </div>
+          <>
+            <div className="catalog-controls" aria-label="Pencarian dan filter katalog">
+              <div className="catalog-search-row">
+                <label className="catalog-search">
+                  <span className="catalog-search-icon" aria-hidden="true">⌕</span>
+                  <span className="sr-only">Cari nama, kategori, atau asal</span>
+                  <input
+                    ref={catalogSearchRef}
+                    type="search"
+                    value={catalogQuery}
+                    onChange={(event) => setCatalogQuery(event.target.value)}
+                    placeholder="Cari nama, kategori, atau asal…"
+                    autoComplete="off"
+                  />
+                  {catalogQuery && <button type="button" aria-label="Hapus teks pencarian" onClick={() => { setCatalogQuery(""); catalogSearchRef.current?.focus(); }}>×</button>}
+                </label>
+                {hasActiveCatalogFilters && <button className="catalog-reset" type="button" onClick={resetCatalogFilters}>Reset filter</button>}
+              </div>
+              <div className="catalog-filter-row">
+                <span className="catalog-filter-label">Kategori</span>
+                <div className="catalog-chips" role="group" aria-label="Filter berdasarkan kategori">
+                  {["", ...categories].map((category) => (
+                    <button
+                      className="catalog-chip"
+                      key={category || "all"}
+                      type="button"
+                      aria-pressed={selectedCategory === category}
+                      onClick={() => setSelectedCategory(category)}
+                    >{category || "Semua"}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="catalog-results-toolbar">
+              <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
+            </div>
+            {visibleProducts.length === 0 ? (
+              <div className="catalog-empty-state" role="status">
+                <strong>Tidak ada produk yang cocok</strong>
+                <p>Coba kata lain atau hapus filter untuk melihat semua produk.</p>
+                <button type="button" onClick={resetCatalogFilters}>Hapus filter</button>
+              </div>
+            ) : (
+              <div className="product-grid">
+                {visibleProducts.map((product) => {
+                  const index = products.findIndex((item) => item.id === product.id);
+                  return (
+                    <article className="product-card" key={product.id}>
+                      <div className={`product-art art-${index % 3}`}><span className="product-number">{String(index + 1).padStart(2, "0")}</span><span className="product-stamp">{product.origin}</span></div>
+                      <div className="product-details"><span className="product-category">{product.category}</span><h3>{product.name}</h3><p>Asal {product.origin} <span>·</span> Satuan {product.unit}</p></div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </section>
 
