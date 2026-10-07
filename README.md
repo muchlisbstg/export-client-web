@@ -20,13 +20,15 @@ npm run typecheck
 npm run build
 ```
 
-Regresi interoperabilitas tiga backend dijalankan terpisah setelah repo mobile dan desktop tersedia pada folder sejajar (`../export-client-mobile-sync` dan `../export-client-desktop-sync`):
+## Verifikasi interoperabilitas tiga backend
+
+Setelah repo mobile dan desktop tersedia pada folder sejajar (`../export-client-mobile-sync` dan `../export-client-desktop-sync`), jalankan:
 
 ```bash
 npm run test:interop
 ```
 
-Tes ini hanya memakai inquiry sintetis dan database SQLite sementara, lalu menghapus database tersebut saat selesai. CI menjalankannya pada perubahan repo web, dapat dijalankan manual, dan mengulanginya setiap hari terhadap `main` mobile dan desktop.
+Harness memverifikasi replikasi tepat satu kali, respons pelacakan publik, replay duplikat, konflik payload dan tracking-code tanpa overwrite, serta outbox yang terkuras. Ia hanya memakai inquiry sintetis dan database SQLite sementara yang dibersihkan setelah tes. Lihat [runbook pengujian](docs/interop-testing.md) untuk langkah lokal dan rincian cakupan. CI ketiga repo menjalankan tes ini saat push dan pull request; workflow Web juga mendukung pemicu manual dan jadwal harian terhadap `main` Mobile dan Desktop.
 
 Untuk menjalankan build web melalui backend:
 
