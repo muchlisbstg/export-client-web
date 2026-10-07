@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { catalogSortOptions, filterProducts, getCategories, sortProducts, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
   id: string;
@@ -32,6 +33,7 @@ export default function App() {
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState(initialForm);
+  const [fieldErrors, setFieldErrors] = useState<InquiryFieldErrors>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -70,16 +72,42 @@ export default function App() {
     catalogSearchRef.current?.focus();
   }
 
+  function updateInquiryField(field: InquiryField, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const message = validateInquiryField(field, value);
+      const next = { ...current };
+      if (message) next[field] = message;
+      else delete next[field];
+      return next;
+    });
+  }
+
   async function submitInquiry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
     setError("");
     setTrackedInquiry(null);
+    const errors = validateInquiryForm(form);
+    setFieldErrors(errors);
+    const firstInvalidField = (Object.keys(errors) as InquiryField[])[0];
+    if (firstInvalidField) {
+      requestAnimationFrame(() => document.getElementById(`rfq-${firstInvalidField}`)?.focus());
+      return;
+    }
+    setSubmitting(true);
     try {
       const response = await fetch("/api/v1/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, quantity: Number(form.quantity) }),
+        body: JSON.stringify({
+          ...form,
+          customerName: form.customerName.trim(),
+          customerEmail: form.customerEmail.trim(),
+          destinationCountry: form.destinationCountry.trim(),
+          productId: form.productId.trim(),
+          quantity: Number(form.quantity),
+        }),
       });
       const result = (await response.json()) as { trackingCode?: string; error?: string };
       if (!response.ok || !result.trackingCode) {
@@ -89,6 +117,7 @@ export default function App() {
       setTrackingCode(result.trackingCode);
       setTrackingInput(result.trackingCode);
       setForm((current) => ({ ...initialForm, productId: current.productId }));
+      setFieldErrors({});
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Permintaan gagal dikirim.");
     } finally {
@@ -236,12 +265,12 @@ export default function App() {
         <div className="form-panel">
           <div className="section-heading compact"><div><p className="eyebrow">02 — RFQ</p><h2>Ajukan penawaran</h2></div></div>
           <p className="form-intro">Isi kebutuhan Anda. Permintaan tersimpan pada backend lokal dan direplikasi ke peer yang dikonfigurasi.</p>
-          <form className="form-grid" onSubmit={submitInquiry}>
-            <label>Nama lengkap<input required minLength={2} maxLength={120} autoComplete="name" value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} placeholder="Nama Anda" /></label>
-            <label>Email kerja<input required type="email" maxLength={254} autoComplete="email" value={form.customerEmail} onChange={(event) => setForm({ ...form, customerEmail: event.target.value })} placeholder="nama@perusahaan.com" /></label>
-            <label>Negara tujuan<input required minLength={2} maxLength={80} autoComplete="country-name" value={form.destinationCountry} onChange={(event) => setForm({ ...form, destinationCountry: event.target.value })} placeholder="Contoh: Jepang" /></label>
-            <label>Produk<select required value={form.productId} onChange={(event) => setForm({ ...form, productId: event.target.value })}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-            <label className="full-width">Jumlah (kg)<input required type="number" min="1" max="1000000" step="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} /></label>
+          <form className="form-grid" onSubmit={submitInquiry} noValidate>
+            <label htmlFor="rfq-customerName">Nama lengkap<input id="rfq-customerName" required autoComplete="name" value={form.customerName} onChange={(event) => updateInquiryField("customerName", event.target.value)} aria-invalid={Boolean(fieldErrors.customerName)} aria-describedby={fieldErrors.customerName ? "rfq-customerName-error" : undefined} placeholder="Nama Anda" />{fieldErrors.customerName && <span className="field-error" id="rfq-customerName-error" aria-live="polite">{fieldErrors.customerName}</span>}</label>
+            <label htmlFor="rfq-customerEmail">Email kerja<input id="rfq-customerEmail" required type="email" autoComplete="email" value={form.customerEmail} onChange={(event) => updateInquiryField("customerEmail", event.target.value)} aria-invalid={Boolean(fieldErrors.customerEmail)} aria-describedby={fieldErrors.customerEmail ? "rfq-customerEmail-error" : undefined} placeholder="nama@perusahaan.com" />{fieldErrors.customerEmail && <span className="field-error" id="rfq-customerEmail-error" aria-live="polite">{fieldErrors.customerEmail}</span>}</label>
+            <label htmlFor="rfq-destinationCountry">Negara tujuan<input id="rfq-destinationCountry" required autoComplete="country-name" value={form.destinationCountry} onChange={(event) => updateInquiryField("destinationCountry", event.target.value)} aria-invalid={Boolean(fieldErrors.destinationCountry)} aria-describedby={fieldErrors.destinationCountry ? "rfq-destinationCountry-error" : undefined} placeholder="Contoh: Jepang" />{fieldErrors.destinationCountry && <span className="field-error" id="rfq-destinationCountry-error" aria-live="polite">{fieldErrors.destinationCountry}</span>}</label>
+            <label htmlFor="rfq-productId">Produk<select id="rfq-productId" required value={form.productId} onChange={(event) => updateInquiryField("productId", event.target.value)} aria-invalid={Boolean(fieldErrors.productId)} aria-describedby={fieldErrors.productId ? "rfq-productId-error" : undefined}>{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>{fieldErrors.productId && <span className="field-error" id="rfq-productId-error" aria-live="polite">{fieldErrors.productId}</span>}</label>
+            <label className="full-width" htmlFor="rfq-quantity">Jumlah (kg)<input id="rfq-quantity" required type="number" min="0" max="1000000" step="any" value={form.quantity} onChange={(event) => updateInquiryField("quantity", event.target.value)} aria-invalid={Boolean(fieldErrors.quantity)} aria-describedby={fieldErrors.quantity ? "rfq-quantity-error" : undefined} />{fieldErrors.quantity && <span className="field-error" id="rfq-quantity-error" aria-live="polite">{fieldErrors.quantity}</span>}</label>
             <button className="primary-button full-width" type="submit" disabled={submitting || loading || products.length === 0}>{submitting ? "Mengirim…" : "Kirim permintaan"}<span aria-hidden="true">↗</span></button>
           </form>
           {trackingCode && <div className="success-box" role="status"><strong>Permintaan tersimpan.</strong><span>Kode pelacakan Anda (simpan untuk digunakan di web, mobile, atau desktop yang tersinkron):</span><code>{trackingCode}</code></div>}
