@@ -267,19 +267,85 @@ try {
     }
   }
 
+  const duplicateCandidate = sourceRecords[0];
+  assert(duplicateCandidate, "At least one synthetic inquiry must be available for conflict checks");
+  const collisionId = "33333333-3333-4333-8333-333333333333";
+  let duplicateReplays = 0;
+  let recordMismatchConflicts = 0;
+  let trackingCodeCollisions = 0;
+
+  for (const origin of origins) {
+    const targetDatabase = databases.find(({ name }) => name === origin.name.toLowerCase())?.db;
+    assert(targetDatabase, `Missing database for ${origin.name}`);
+    const sendSyncRecord = (record) => fetch(`${origin.base}/api/v1/sync/inquiries`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+      body: JSON.stringify(record),
+    });
+
+    const duplicateResponse = await sendSyncRecord(duplicateCandidate);
+    assert.equal(duplicateResponse.status, 200, `${origin.name} must acknowledge an identical replay`);
+    assert.deepEqual(await duplicateResponse.json(), { result: "duplicate" });
+    duplicateReplays += 1;
+
+    const mismatchResponse = await sendSyncRecord({ ...duplicateCandidate, customerName: "Conflicting Synthetic Payload" });
+    assert.equal(mismatchResponse.status, 409, `${origin.name} must reject a changed payload with the same inquiry ID`);
+    const mismatchBody = await mismatchResponse.json();
+    assert.equal(mismatchBody.error, "sync_conflict");
+    assert.match(mismatchBody.existingHash, /^[a-f0-9]{64}$/);
+    assert.match(mismatchBody.incomingHash, /^[a-f0-9]{64}$/);
+    const storedOriginal = targetDatabase.prepare(
+      "SELECT customer_name AS customerName FROM inquiries WHERE id = ?",
+    ).get(duplicateCandidate.id);
+    assert.equal(storedOriginal.customerName, duplicateCandidate.customerName, `${origin.name} must preserve the original record`);
+    const mismatchConflict = targetDatabase.prepare(
+      "SELECT reason FROM sync_conflicts WHERE inquiry_id = ?",
+    ).get(duplicateCandidate.id);
+    assert.equal(mismatchConflict.reason, "record_mismatch");
+    recordMismatchConflicts += 1;
+
+    const collisionResponse = await sendSyncRecord({
+      ...duplicateCandidate,
+      id: collisionId,
+      customerName: "Synthetic Tracking-Code Collision",
+    });
+    assert.equal(collisionResponse.status, 409, `${origin.name} must reject a reused tracking code with a different inquiry ID`);
+    const collisionBody = await collisionResponse.json();
+    assert.equal(collisionBody.error, "sync_conflict");
+    assert.match(collisionBody.existingHash, /^[a-f0-9]{64}$/);
+    assert.match(collisionBody.incomingHash, /^[a-f0-9]{64}$/);
+    const collisionConflict = targetDatabase.prepare(
+      "SELECT reason FROM sync_conflicts WHERE inquiry_id = ?",
+    ).get(collisionId);
+    assert.equal(collisionConflict.reason, "tracking_code_collision");
+    const preservedRecord = targetDatabase.prepare(
+      recordSelect.replace(" ORDER BY id", " WHERE id = ?"),
+    ).get(duplicateCandidate.id);
+    assert.deepEqual(preservedRecord, duplicateCandidate, `${origin.name} must preserve every original inquiry field after conflict rejection`);
+    assert.equal(dbCount(targetDatabase, "inquiries"), 3, `${origin.name} must not insert a collision record`);
+    assert.equal(dbCount(targetDatabase, "sync_outbox"), 0, `${origin.name} must keep its outbox drained`);
+    assert.equal(dbCount(targetDatabase, "sync_conflicts"), 2, `${origin.name} must durably record both rejected conflicts`);
+    trackingCodeCollisions += 1;
+  }
+
+  assert.equal(duplicateReplays, 3, "Each backend must acknowledge one duplicate replay");
+  assert.equal(recordMismatchConflicts, 3, "Each backend must reject one conflicting payload");
+  assert.equal(trackingCodeCollisions, 3, "Each backend must reject one tracking-code collision");
+
   const revisions = {
     web: repositoryRevision(webRoot),
     mobile: repositoryRevision(mobileRoot),
     desktop: repositoryRevision(desktopRoot),
   };
-  const result = `PASS cross-repository sync: 3 synthetic inquiries created across 3 actual backends; 9 total SQLite rows (3 per database); origin IDs preserved; all outboxes drained; 0 conflicts.\nRevisions: web=${revisions.web}, mobile=${revisions.mobile}, desktop=${revisions.desktop}`;
+  const result = `PASS cross-repository sync: 3 synthetic inquiries created across 3 actual backends; 9 total SQLite rows (3 per database); origin IDs preserved; 3 duplicate replays acknowledged; 3 record mismatches and 3 tracking-code collisions rejected without overwrite; all outboxes drained; 6 conflict records.\nRevisions: web=${revisions.web}, mobile=${revisions.mobile}, desktop=${revisions.desktop}`;
   console.log(result);
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(process.env.GITHUB_STEP_SUMMARY,
       `### Cross-repository synchronization\n\n` +
       `- Result: **passed**\n` +
       `- Synthetic inquiries: **3**; total records across three temporary SQLite databases: **9**\n` +
-      `- Origin IDs: preserved; outboxes: drained; conflicts: **0**\n` +
+      `- Origin IDs: preserved; outboxes: drained; duplicate replays: **3**\n` +
+      `- Conflict regressions: **3** record mismatches and **3** tracking-code collisions rejected without overwrite; **6** durable conflict records\n` +
       `- Revisions: web \`${revisions.web}\`, mobile \`${revisions.mobile}\`, desktop \`${revisions.desktop}\`\n`);
   }
 } finally {
