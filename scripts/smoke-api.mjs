@@ -270,6 +270,32 @@ try {
   const rateLimitedLookup = await fetch(`${nodeA.base}/api/v1/inquiries/${created.trackingCode}`);
   assert.equal(rateLimitedLookup.status, 429);
 
+  const peersOnlyPort = await allocatePort();
+  for (const partialConfig of [
+    { nodeId: "web-secret-only", sharedSecret: secret },
+    { nodeId: "web-peers-only", peers: `web-peer-target=http://127.0.0.1:${peersOnlyPort}` },
+  ]) {
+    const partialNode = startNode({
+      ...partialConfig,
+      port: await allocatePort(),
+      dbPath: path.join(tempDir, `${partialConfig.nodeId}.sqlite`),
+    });
+    await waitForHealth(partialNode);
+    const partialCreate = await fetch(`${partialNode.base}/api/v1/inquiries`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+    assert.equal(partialCreate.status, 201);
+    const partialDb = new Database(partialNode.dbPath, { readonly: true });
+    try {
+      const outboxCount = partialDb.prepare("SELECT COUNT(*) AS count FROM sync_outbox").get().count;
+      assert.equal(outboxCount, 0, `${partialConfig.nodeId} must not queue outbound sync with partial configuration`);
+    } finally {
+      partialDb.close();
+    }
+  }
+
   const disabledSync = await fetch(`${nodeC.base}/api/v1/sync/inquiries`, {
     method: "POST",
     headers: { "content-type": "application/json" },
