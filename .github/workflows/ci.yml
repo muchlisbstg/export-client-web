@@ -3,6 +3,9 @@ name: Web and API CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
@@ -25,3 +28,48 @@ jobs:
         run: npm test
       - name: Build web app
         run: npm run build
+
+  interoperability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout web repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Checkout mobile backend
+        uses: actions/checkout@v7
+        with:
+          repository: muchlisbstg/export-client-mobile-sync
+          ref: main
+          path: .ci/mobile
+          persist-credentials: false
+      - name: Checkout desktop backend
+        uses: actions/checkout@v7
+        with:
+          repository: muchlisbstg/export-client-desktop-sync
+          ref: main
+          path: .ci/desktop
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .ci/mobile/package-lock.json
+            .ci/desktop/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+      - name: Install mobile dependencies
+        run: npm ci
+        working-directory: .ci/mobile
+      - name: Install desktop dependencies
+        run: npm ci
+        working-directory: .ci/desktop
+      - name: Test three-backend synchronization
+        run: npm run test:interop
+        env:
+          MOBILE_REPO: ${{ github.workspace }}/.ci/mobile
+          DESKTOP_REPO: ${{ github.workspace }}/.ci/desktop

@@ -20,6 +20,14 @@ npm run typecheck
 npm run build
 ```
 
+Regresi interoperabilitas tiga backend dijalankan terpisah setelah repo mobile dan desktop tersedia pada folder sejajar (`../export-client-mobile-sync` dan `../export-client-desktop-sync`):
+
+```bash
+npm run test:interop
+```
+
+Tes ini hanya memakai inquiry sintetis dan database SQLite sementara, lalu menghapus database tersebut saat selesai. CI menjalankannya pada perubahan repo web, dapat dijalankan manual, dan mengulanginya setiap hari terhadap `main` mobile dan desktop.
+
 Untuk menjalankan build web melalui backend:
 
 ```bash
