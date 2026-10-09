@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getCategories, sortProducts, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getCategories, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
@@ -31,6 +31,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
+  const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState(initialForm);
   const [fieldErrors, setFieldErrors] = useState<InquiryFieldErrors>({});
@@ -65,6 +66,11 @@ export default function App() {
   const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory), catalogSortField, catalogSortDirection);
   const categories = getCategories(products);
   const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "";
+  const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
+
+  function toggleCompare(productId: string) {
+    setCompareProductIds((current) => toggleCompareSelection(current, productId));
+  }
 
   function resetCatalogFilters() {
     setCatalogQuery("");
@@ -235,9 +241,10 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <div className="catalog-results-toolbar">
-              <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
-            </div>
+                <div className="catalog-results-toolbar">
+                  <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
+                  <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
+                </div>
             {visibleProducts.length === 0 ? (
               <div className="catalog-empty-state" role="status">
                 <strong>Tidak ada produk yang cocok</strong>
@@ -251,12 +258,16 @@ export default function App() {
                   return (
                     <article className="product-card" key={product.id}>
                       <div className={`product-art art-${index % 3}`}><span className="product-number">{String(index + 1).padStart(2, "0")}</span><span className="product-stamp">{product.origin}</span></div>
-                      <div className="product-details"><span className="product-category">{product.category}</span><h3>{product.name}</h3><p>Asal {product.origin} <span>·</span> Satuan {product.unit}</p></div>
+                      <div className="product-details"><span className="product-category">{product.category}</span><h3>{product.name}</h3><p>Asal {product.origin} <span>·</span> Satuan {product.unit}</p><button className={`compare-toggle${compareProductIds.includes(product.id) ? " is-selected" : ""}`} type="button" aria-pressed={compareProductIds.includes(product.id)} disabled={!compareProductIds.includes(product.id) && compareProductIds.length >= MAX_COMPARE_PRODUCTS} onClick={() => toggleCompare(product.id)}>{compareProductIds.includes(product.id) ? "✓ Ditambahkan" : "Bandingkan"}</button></div>
                     </article>
                   );
                 })}
               </div>
             )}
+            {compareProductIds.length > 0 && <section className="catalog-compare-panel" aria-label="Perbandingan produk">
+              <div className="catalog-compare-heading"><div><h3>Perbandingan produk</h3><p role="status" aria-live="polite">{comparedProducts.length} dari {MAX_COMPARE_PRODUCTS} dipilih · atribut dari katalog API</p></div><button type="button" onClick={() => setCompareProductIds([])}>Hapus semua</button></div>
+              {comparedProducts.length < 2 ? <p className="catalog-compare-hint">Pilih setidaknya satu produk lagi untuk membandingkan detail.</p> : <div className="catalog-compare-table-wrap"><table className="catalog-compare-table"><thead><tr><th scope="col">Detail</th>{comparedProducts.map((product) => <th scope="col" key={product.id}><span>{product.name}</span><button type="button" aria-label={`Hapus ${product.name} dari perbandingan`} onClick={() => toggleCompare(product.id)}>×</button></th>)}</tr></thead><tbody><tr><th scope="row">Kategori</th>{comparedProducts.map((product) => <td key={product.id}>{product.category}</td>)}</tr><tr><th scope="row">Asal</th>{comparedProducts.map((product) => <td key={product.id}>{product.origin}</td>)}</tr><tr><th scope="row">Satuan</th>{comparedProducts.map((product) => <td key={product.id}>{product.unit}</td>)}</tr></tbody></table></div>}
+            </section>}
           </>
         )}
       </section>
