@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getCategories, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getCategories, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
@@ -29,6 +29,7 @@ export default function App() {
   const [catalogError, setCatalogError] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedOrigin, setSelectedOrigin] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
@@ -63,9 +64,10 @@ export default function App() {
     void loadProducts();
   }, []);
 
-  const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory), catalogSortField, catalogSortDirection);
+  const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin), catalogSortField, catalogSortDirection);
   const categories = getCategories(products);
-  const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "";
+  const origins = getOrigins(products);
+  const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "" || selectedOrigin !== "";
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
 
@@ -76,6 +78,7 @@ export default function App() {
   function resetCatalogFilters() {
     setCatalogQuery("");
     setSelectedCategory("");
+    setSelectedOrigin("");
     catalogSearchRef.current?.focus();
   }
 
@@ -215,6 +218,20 @@ export default function App() {
                       aria-pressed={selectedCategory === category}
                       onClick={() => setSelectedCategory(category)}
                     >{category || "Semua"}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="catalog-filter-row">
+                <span className="catalog-filter-label">Asal</span>
+                <div className="catalog-chips" role="group" aria-label="Filter berdasarkan asal">
+                  {["", ...origins].map((origin) => (
+                    <button
+                      className="catalog-chip"
+                      key={origin || "all-origins"}
+                      type="button"
+                      aria-pressed={selectedOrigin === origin}
+                      onClick={() => setSelectedOrigin(origin)}
+                    >{origin || "Semua asal"}</button>
                   ))}
                 </div>
               </div>

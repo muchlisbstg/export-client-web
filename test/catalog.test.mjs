@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterProducts, getCategories, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
+import { filterProducts, getCategories, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
 
 const products = [
   { id: "coffee", name: "Kopi Arabika", category: "Kopi", origin: "Indonesia", unit: "kg" },
@@ -26,9 +26,19 @@ test("categories are unique, dynamic, and alphabetically sorted", () => {
   assert.deepEqual(getCategories(extended), ["Biji", "Cafe", "Kakao", "Kopi", "Rempah"]);
 });
 
+test("origins are unique, dynamic, and alphabetically sorted", () => {
+  const extended = [...products, { ...products[0], id: "coffee-2" }, { ...products[0], origin: "Bali", id: "new" }];
+  assert.deepEqual(getOrigins(extended), ["Bali", "Côte d'Ivoire", "Ekuador", "Indonesia", "Réunion"]);
+});
+
 test("text and category filters combine with AND", () => {
   assert.deepEqual(filterProducts(products, "Indonesia", "Kopi").map((item) => item.id), ["coffee"]);
   assert.deepEqual(filterProducts(products, "Indonesia", "Kakao"), []);
+});
+
+test("text, category, and origin filters combine with AND", () => {
+  assert.deepEqual(filterProducts(products, "kopi", "Kopi", "Indonesia").map((item) => item.id), ["coffee"]);
+  assert.deepEqual(filterProducts(products, "", "Kopi", "Ekuador"), []);
 });
 
 test("an API category named all remains a real, filterable category", () => {
