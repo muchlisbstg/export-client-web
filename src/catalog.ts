@@ -39,6 +39,18 @@ export const catalogSortOptions: ReadonlyArray<{ field: CatalogSortField; label:
   { field: "unit", label: "Satuan" },
 ];
 
+export type ActiveCatalogFilter = { key: "search" | "category" | "origin"; value: string };
+
+/** Describe active filters in a stable order for the removable filter summary. */
+export function getActiveCatalogFilters(query: string, category: string, origin: string): ActiveCatalogFilter[] {
+  const filters: ActiveCatalogFilter[] = [];
+  const trimmedQuery = query.trim();
+  if (trimmedQuery) filters.push({ key: "search", value: trimmedQuery });
+  if (category) filters.push({ key: "category", value: category });
+  if (origin) filters.push({ key: "origin", value: origin });
+  return filters;
+}
+
 function normalizeForSearch(value: unknown): string {
   return String(value ?? "")
     .normalize("NFD")

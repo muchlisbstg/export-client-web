@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getCategories, getFacetCounts, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
@@ -71,7 +71,8 @@ export default function App() {
   const originFacetProducts = filterProducts(products, catalogQuery, selectedCategory, "");
   const categoryFacetCounts = getFacetCounts(categoryFacetProducts, "category");
   const originFacetCounts = getFacetCounts(originFacetProducts, "origin");
-  const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "" || selectedOrigin !== "";
+  const activeCatalogFilters = getActiveCatalogFilters(catalogQuery, selectedCategory, selectedOrigin);
+  const hasActiveCatalogFilters = activeCatalogFilters.length > 0;
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
 
@@ -84,6 +85,12 @@ export default function App() {
     setSelectedCategory("");
     setSelectedOrigin("");
     catalogSearchRef.current?.focus();
+  }
+
+  function clearCatalogFilter(key: "search" | "category" | "origin") {
+    if (key === "search") setCatalogQuery("");
+    else if (key === "category") setSelectedCategory("");
+    else setSelectedOrigin("");
   }
 
   function updateInquiryField(field: InquiryField, value: string) {
@@ -263,10 +270,17 @@ export default function App() {
                 </div>
               </div>
             </div>
-                <div className="catalog-results-toolbar">
-                  <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
-                  <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
-                </div>
+            {activeCatalogFilters.length > 0 && <div className="catalog-active-filters" role="group" aria-label="Filter aktif">
+              <span className="catalog-active-label">Filter aktif</span>
+              {activeCatalogFilters.map((filter) => {
+                const label = filter.key === "search" ? "Pencarian" : filter.key === "category" ? "Kategori" : "Asal";
+                return <span className="catalog-active-chip" key={filter.key}><span>{label}: {filter.value}</span><button type="button" aria-label={`Hapus filter ${label.toLowerCase()}: ${filter.value}`} onClick={() => clearCatalogFilter(filter.key)}>×</button></span>;
+              })}
+            </div>}
+            <div className="catalog-results-toolbar">
+              <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
+              <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
+            </div>
             {visibleProducts.length === 0 ? (
               <div className="catalog-empty-state" role="status">
                 <strong>Tidak ada produk yang cocok</strong>
