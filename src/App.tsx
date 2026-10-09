@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 import { formatCatalogShare } from "./catalog-share";
+import { filterOutComparedProducts } from "./catalog";
 
 type Product = {
   id: string;
@@ -35,6 +36,7 @@ export default function App() {
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
+  const [hideComparedProducts, setHideComparedProducts] = useState(false);
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState(initialForm);
   const [fieldErrors, setFieldErrors] = useState<InquiryFieldErrors>({});
@@ -66,7 +68,8 @@ export default function App() {
     void loadProducts();
   }, []);
 
-  const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin), catalogSortField, catalogSortDirection);
+  const matchingProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin), catalogSortField, catalogSortDirection);
+  const visibleProducts = hideComparedProducts ? filterOutComparedProducts(matchingProducts, compareProductIds) : matchingProducts;
   const categories = getCategories(products);
   const origins = getOrigins(products);
   const categoryFacetProducts = filterProducts(products, catalogQuery, "", selectedOrigin);
@@ -296,8 +299,9 @@ export default function App() {
               })}
             </div>}
             <div className="catalog-results-toolbar">
-              <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
+              <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {hideComparedProducts ? matchingProducts.length : products.length} {hideComparedProducts ? "hasil" : "produk"}</p>
               <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
+              <button className={`catalog-hide-compared${hideComparedProducts ? " is-active" : ""}`} type="button" aria-pressed={hideComparedProducts} disabled={comparedProducts.length === 0 && !hideComparedProducts} onClick={() => setHideComparedProducts((current) => !current)}>{hideComparedProducts ? "Tampilkan yang dibandingkan" : "Sembunyikan yang dibandingkan"}</button>
               <div className="catalog-share-actions">
                 <button className="catalog-share-button" type="button" onClick={() => void copyCatalogResults()} disabled={visibleProducts.length === 0}>Salin hasil</button>
                 {catalogShareNotice && <span className="catalog-share-notice" role="status" aria-live="polite">{catalogShareNotice}</span>}
@@ -305,9 +309,9 @@ export default function App() {
             </div>
             {visibleProducts.length === 0 ? (
               <div className="catalog-empty-state" role="status">
-                <strong>Tidak ada produk yang cocok</strong>
-                <p>Coba kata lain atau hapus filter untuk melihat semua produk.</p>
-                <button type="button" onClick={resetCatalogFilters}>Hapus filter</button>
+                <strong>{hideComparedProducts && matchingProducts.length > 0 ? "Semua hasil sudah dibandingkan" : "Tidak ada produk yang cocok"}</strong>
+                <p>{hideComparedProducts && matchingProducts.length > 0 ? "Produk yang sudah dipilih untuk perbandingan disembunyikan." : "Coba kata lain atau hapus filter untuk melihat semua produk."}</p>
+                <button type="button" onClick={() => hideComparedProducts && matchingProducts.length > 0 ? setHideComparedProducts(false) : resetCatalogFilters()}>{hideComparedProducts && matchingProducts.length > 0 ? "Tampilkan semua hasil" : "Hapus filter"}</button>
               </div>
             ) : (
               <div className="product-grid">
