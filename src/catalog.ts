@@ -45,15 +45,16 @@ export const catalogSortOptions: ReadonlyArray<{ field: CatalogSortField; label:
   { field: "unit", label: "Satuan" },
 ];
 
-export type ActiveCatalogFilter = { key: "search" | "category" | "origin"; value: string };
+export type ActiveCatalogFilter = { key: "search" | "category" | "origin" | "unit"; value: string };
 
 /** Describe active filters in a stable order for the removable filter summary. */
-export function getActiveCatalogFilters(query: string, category: string, origin: string): ActiveCatalogFilter[] {
+export function getActiveCatalogFilters(query: string, category: string, origin: string, unit = ""): ActiveCatalogFilter[] {
   const filters: ActiveCatalogFilter[] = [];
   const trimmedQuery = query.trim();
   if (trimmedQuery) filters.push({ key: "search", value: trimmedQuery });
   if (category) filters.push({ key: "category", value: category });
   if (origin) filters.push({ key: "origin", value: origin });
+  if (unit) filters.push({ key: "unit", value: unit });
   return filters;
 }
 
@@ -75,7 +76,12 @@ export function getOrigins<T extends CatalogProduct>(products: readonly T[]): st
   return [...origins].sort((a, b) => a.localeCompare(b, "id-ID", { sensitivity: "base" }));
 }
 
-export type CatalogFacetField = "category" | "origin";
+export function getUnits<T extends CatalogProduct>(products: readonly T[]): string[] {
+  const units = new Set(products.map((product) => product.unit).filter((unit): unit is string => Boolean(unit)));
+  return [...units].sort((a, b) => a.localeCompare(b, "id-ID", { sensitivity: "base" }));
+}
+
+export type CatalogFacetField = "category" | "origin" | "unit";
 
 /** Count non-empty facet values in the supplied, already-filtered catalog subset. */
 export function getFacetCounts<T extends Pick<CatalogProduct, CatalogFacetField>>(
@@ -96,13 +102,15 @@ export function filterProducts<T extends CatalogProduct>(
   query = "",
   selectedCategory = "",
   selectedOrigin = "",
+  selectedUnit = "",
 ): T[] {
   const normalizedQuery = normalizeForSearch(query);
   return products.filter((product) => {
     const matchesCategory = selectedCategory === "" || product.category === selectedCategory;
     const matchesOrigin = selectedOrigin === "" || product.origin === selectedOrigin;
+    const matchesUnit = selectedUnit === "" || product.unit === selectedUnit;
     const searchableText = normalizeForSearch(`${product.name} ${product.category} ${product.origin}`);
-    return matchesCategory && matchesOrigin && (!normalizedQuery || searchableText.includes(normalizedQuery));
+    return matchesCategory && matchesOrigin && matchesUnit && (!normalizedQuery || searchableText.includes(normalizedQuery));
   });
 }
 

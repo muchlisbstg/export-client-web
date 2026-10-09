@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, formatComparisonCsv, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getUnits, formatComparisonCsv, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 import { formatCatalogShare } from "./catalog-share";
 import { filterOutComparedProducts } from "./catalog";
@@ -34,6 +34,7 @@ export default function App() {
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedOrigin, setSelectedOrigin] = useState("");
+  const [selectedUnit, setSelectedUnit] = useState("");
   const [catalogShareNotice, setCatalogShareNotice] = useState("");
   const [comparisonShareNotice, setComparisonShareNotice] = useState("");
   const [comparisonCsvNotice, setComparisonCsvNotice] = useState("");
@@ -73,15 +74,18 @@ export default function App() {
     void loadProducts();
   }, []);
 
-  const matchingProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin), catalogSortField, catalogSortDirection);
+  const matchingProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin, selectedUnit), catalogSortField, catalogSortDirection);
   const visibleProducts = hideComparedProducts ? filterOutComparedProducts(matchingProducts, compareProductIds) : matchingProducts;
   const categories = getCategories(products);
   const origins = getOrigins(products);
-  const categoryFacetProducts = filterProducts(products, catalogQuery, "", selectedOrigin);
-  const originFacetProducts = filterProducts(products, catalogQuery, selectedCategory, "");
+  const units = getUnits(products);
+  const categoryFacetProducts = filterProducts(products, catalogQuery, "", selectedOrigin, selectedUnit);
+  const originFacetProducts = filterProducts(products, catalogQuery, selectedCategory, "", selectedUnit);
+  const unitFacetProducts = filterProducts(products, catalogQuery, selectedCategory, selectedOrigin);
   const categoryFacetCounts = getFacetCounts(categoryFacetProducts, "category");
   const originFacetCounts = getFacetCounts(originFacetProducts, "origin");
-  const activeCatalogFilters = getActiveCatalogFilters(catalogQuery, selectedCategory, selectedOrigin);
+  const unitFacetCounts = getFacetCounts(unitFacetProducts, "unit");
+  const activeCatalogFilters = getActiveCatalogFilters(catalogQuery, selectedCategory, selectedOrigin, selectedUnit);
   const hasActiveCatalogFilters = activeCatalogFilters.length > 0;
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
@@ -94,6 +98,7 @@ export default function App() {
         query: catalogQuery,
         category: selectedCategory,
         origin: selectedOrigin,
+        unit: selectedUnit,
         sortField: catalogSortField,
         sortDirection: catalogSortDirection,
       }));
@@ -140,13 +145,15 @@ export default function App() {
     setCatalogQuery("");
     setSelectedCategory("");
     setSelectedOrigin("");
+    setSelectedUnit("");
     catalogSearchRef.current?.focus();
   }
 
-  function clearCatalogFilter(key: "search" | "category" | "origin") {
+  function clearCatalogFilter(key: "search" | "category" | "origin" | "unit") {
     if (key === "search") setCatalogQuery("");
     else if (key === "category") setSelectedCategory("");
-    else setSelectedOrigin("");
+    else if (key === "origin") setSelectedOrigin("");
+    else setSelectedUnit("");
   }
 
   function updateInquiryField(field: InquiryField, value: string) {
@@ -303,6 +310,20 @@ export default function App() {
                 </div>
               </div>
               <div className="catalog-filter-row">
+                <span className="catalog-filter-label">Satuan</span>
+                <div className="catalog-chips" role="group" aria-label="Filter berdasarkan satuan">
+                  { ["", ...units].map((unit) => (
+                    <button
+                      className="catalog-chip"
+                      key={unit || "all-units"}
+                      type="button"
+                      aria-pressed={selectedUnit === unit}
+                      onClick={() => setSelectedUnit(unit)}
+                    >{unit ? `${unit} (${unitFacetCounts.get(unit) ?? 0})` : `Semua satuan (${unitFacetProducts.length})`}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="catalog-filter-row">
                 <span className="catalog-filter-label">Urutkan</span>
                 <div className="catalog-chips" role="group" aria-label="Urutkan produk">
                   {catalogSortOptions.map(({ field, label }) => (
@@ -329,7 +350,7 @@ export default function App() {
             {activeCatalogFilters.length > 0 && <div className="catalog-active-filters" role="group" aria-label="Filter aktif">
               <span className="catalog-active-label">Filter aktif</span>
               {activeCatalogFilters.map((filter) => {
-                const label = filter.key === "search" ? "Pencarian" : filter.key === "category" ? "Kategori" : "Asal";
+                const label = filter.key === "search" ? "Pencarian" : filter.key === "category" ? "Kategori" : filter.key === "origin" ? "Asal" : "Satuan";
                 return <span className="catalog-active-chip" key={filter.key}><span>{label}: {filter.value}</span><button type="button" aria-label={`Hapus filter ${label.toLowerCase()}: ${filter.value}`} onClick={() => clearCatalogFilter(filter.key)}>×</button></span>;
               })}
             </div>}
