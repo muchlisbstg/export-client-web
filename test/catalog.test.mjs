@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterProducts, getCategories, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
+import { filterProducts, getCategories, getFacetCounts, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
 
 const products = [
   { id: "coffee", name: "Kopi Arabika", category: "Kopi", origin: "Indonesia", unit: "kg" },
@@ -29,6 +29,15 @@ test("categories are unique, dynamic, and alphabetically sorted", () => {
 test("origins are unique, dynamic, and alphabetically sorted", () => {
   const extended = [...products, { ...products[0], id: "coffee-2" }, { ...products[0], origin: "Bali", id: "new" }];
   assert.deepEqual(getOrigins(extended), ["Bali", "Côte d'Ivoire", "Ekuador", "Indonesia", "Réunion"]);
+});
+
+test("facet counts reflect the other active filter and omit empty values", () => {
+  const categoriesForIndonesia = getFacetCounts(filterProducts(products, "", "", "Indonesia"), "category");
+  assert.deepEqual([...categoriesForIndonesia], [["Kopi", 1]]);
+  const originsForCoffee = getFacetCounts(filterProducts(products, "", "Kopi"), "origin");
+  assert.deepEqual([...originsForCoffee], [["Indonesia", 1]]);
+  const sparse = getFacetCounts([...products, { ...products[0], id: "missing-category", category: "" }], "category");
+  assert.equal(sparse.has(""), false);
 });
 
 test("text and category filters combine with AND", () => {

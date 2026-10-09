@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getCategories, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getCategories, getFacetCounts, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
@@ -67,6 +67,10 @@ export default function App() {
   const visibleProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin), catalogSortField, catalogSortDirection);
   const categories = getCategories(products);
   const origins = getOrigins(products);
+  const categoryFacetProducts = filterProducts(products, catalogQuery, "", selectedOrigin);
+  const originFacetProducts = filterProducts(products, catalogQuery, selectedCategory, "");
+  const categoryFacetCounts = getFacetCounts(categoryFacetProducts, "category");
+  const originFacetCounts = getFacetCounts(originFacetProducts, "origin");
   const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "" || selectedOrigin !== "";
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
@@ -217,7 +221,7 @@ export default function App() {
                       type="button"
                       aria-pressed={selectedCategory === category}
                       onClick={() => setSelectedCategory(category)}
-                    >{category || "Semua"}</button>
+                    >{category ? `${category} (${categoryFacetCounts.get(category) ?? 0})` : `Semua (${categoryFacetProducts.length})`}</button>
                   ))}
                 </div>
               </div>
@@ -231,7 +235,7 @@ export default function App() {
                       type="button"
                       aria-pressed={selectedOrigin === origin}
                       onClick={() => setSelectedOrigin(origin)}
-                    >{origin || "Semua asal"}</button>
+                    >{origin ? `${origin} (${originFacetCounts.get(origin) ?? 0})` : `Semua asal (${originFacetProducts.length})`}</button>
                   ))}
                 </div>
               </div>
