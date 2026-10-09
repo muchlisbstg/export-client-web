@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, formatComparisonCsv, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 import { formatCatalogShare } from "./catalog-share";
 import { filterOutComparedProducts } from "./catalog";
@@ -36,6 +36,7 @@ export default function App() {
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [catalogShareNotice, setCatalogShareNotice] = useState("");
   const [comparisonShareNotice, setComparisonShareNotice] = useState("");
+  const [comparisonCsvNotice, setComparisonCsvNotice] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
@@ -109,6 +110,25 @@ export default function App() {
       setComparisonShareNotice("Ringkasan perbandingan disalin. Silakan tempel untuk membagikan.");
     } catch (caught) {
       setComparisonShareNotice(caught instanceof Error ? caught.message : "Perbandingan tidak dapat disalin.");
+    }
+  }
+
+  function downloadComparisonCsv() {
+    try {
+      const csv = formatComparisonCsv(comparedProducts, visibleComparisonFields);
+      if (!csv) throw new Error("Pilih setidaknya dua produk untuk mengekspor perbandingan.");
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "perbandingan-produk.csv";
+      link.style.display = "none";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setComparisonCsvNotice("Unduhan CSV perbandingan dimulai.");
+    } catch (caught) {
+      setComparisonCsvNotice(caught instanceof Error ? caught.message : "CSV perbandingan tidak dapat diunduh.");
     }
   }
 
@@ -348,9 +368,11 @@ export default function App() {
                   <div className="catalog-share-actions">
                     <button className="catalog-compare-filter" type="button" aria-pressed={showOnlyDifferences} onClick={() => setShowOnlyDifferences((current) => !current)}>{showOnlyDifferences ? "Tampilkan semua atribut" : "Hanya tampilkan perbedaan"}</button>
                     <button className="catalog-share-button" type="button" onClick={() => void copyComparison()} aria-label="Salin perbandingan produk">Salin perbandingan</button>
+                    <button className="catalog-share-button" type="button" onClick={downloadComparisonCsv} aria-label="Unduh perbandingan produk sebagai CSV">Unduh CSV</button>
                   </div>
                 </div>
                 {comparisonShareNotice && <p className="catalog-share-notice" role="status" aria-live="polite">{comparisonShareNotice}</p>}
+                {comparisonCsvNotice && <p className="catalog-share-notice" role="status" aria-live="polite">{comparisonCsvNotice}</p>}
                 {showOnlyDifferences && visibleComparisonFields.length === 0 ? <p className="catalog-compare-empty" role="status">Tidak ada atribut yang berbeda pada pilihan ini.</p> : <div className="catalog-compare-table-wrap"><table className="catalog-compare-table"><thead><tr><th scope="col">Detail</th>{comparedProducts.map((product) => <th scope="col" key={product.id}><span>{product.name}</span><button type="button" aria-label={`Hapus ${product.name} dari perbandingan`} onClick={() => toggleCompare(product.id)}>×</button></th>)}</tr></thead><tbody>
                   {visibleComparisonFields.map((field) => <tr key={field}><th scope="row">{comparisonFieldLabels[field]}</th>{comparedProducts.map((product) => <td key={product.id} className={differingComparisonFields.includes(field) ? "is-different" : undefined}>{differingComparisonFields.includes(field) && <span className="catalog-compare-difference">Berbeda</span>}{product[field]}</td>)}</tr>)}
                 </tbody></table></div>}
