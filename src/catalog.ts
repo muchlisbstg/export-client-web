@@ -52,16 +52,23 @@ export function getCategories<T extends CatalogProduct>(products: readonly T[]):
   return [...categories].sort((a, b) => a.localeCompare(b, "id-ID", { sensitivity: "base" }));
 }
 
+export function getOrigins<T extends CatalogProduct>(products: readonly T[]): string[] {
+  const origins = new Set(products.map((product) => product.origin).filter(Boolean));
+  return [...origins].sort((a, b) => a.localeCompare(b, "id-ID", { sensitivity: "base" }));
+}
+
 export function filterProducts<T extends CatalogProduct>(
   products: readonly T[],
   query = "",
   selectedCategory = "",
+  selectedOrigin = "",
 ): T[] {
   const normalizedQuery = normalizeForSearch(query);
   return products.filter((product) => {
     const matchesCategory = selectedCategory === "" || product.category === selectedCategory;
+    const matchesOrigin = selectedOrigin === "" || product.origin === selectedOrigin;
     const searchableText = normalizeForSearch(`${product.name} ${product.category} ${product.origin}`);
-    return matchesCategory && (!normalizedQuery || searchableText.includes(normalizedQuery));
+    return matchesCategory && matchesOrigin && (!normalizedQuery || searchableText.includes(normalizedQuery));
   });
 }
 
