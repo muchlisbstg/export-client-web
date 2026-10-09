@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterProducts, getCategories, getFacetCounts, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
+import { filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
 
 const products = [
   { id: "coffee", name: "Kopi Arabika", category: "Kopi", origin: "Indonesia", unit: "kg" },
@@ -74,6 +74,15 @@ test("filtering returns a new result without mutating the source array", () => {
   const result = filterProducts(products, "cocoa");
   assert.notEqual(result, products);
   assert.deepEqual(products.map((item) => item.id), originalOrder);
+});
+
+test("active filter summary trims search and preserves the search-category-origin order", () => {
+  assert.deepEqual(getActiveCatalogFilters("  kopi  ", "Kopi", "Indonesia"), [
+    { key: "search", value: "kopi" },
+    { key: "category", value: "Kopi" },
+    { key: "origin", value: "Indonesia" },
+  ]);
+  assert.deepEqual(getActiveCatalogFilters("   ", "", ""), []);
 });
 
 const sortableProducts = [
