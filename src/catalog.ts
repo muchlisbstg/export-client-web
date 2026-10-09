@@ -124,3 +124,12 @@ export function sortProducts<T extends CatalogProduct>(
     })
     .map(({ product }) => product);
 }
+
+
+/** Choose all comparison attributes by default, or only attributes with differing values. */
+export function getComparisonFieldsToDisplay<T extends ComparisonAttributes>(
+  products: readonly T[],
+  onlyDifferences: boolean,
+): ComparisonField[] {
+  return onlyDifferences ? getDifferingComparisonFields(products) : [...comparisonFields];
+}
