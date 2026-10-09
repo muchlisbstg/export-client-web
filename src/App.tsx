@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
+import { formatCatalogShare } from "./catalog-share";
 
 type Product = {
   id: string;
@@ -30,6 +31,7 @@ export default function App() {
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedOrigin, setSelectedOrigin] = useState("");
+  const [catalogShareNotice, setCatalogShareNotice] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
   const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
@@ -75,6 +77,22 @@ export default function App() {
   const hasActiveCatalogFilters = activeCatalogFilters.length > 0;
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
+
+  async function copyCatalogResults() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Fitur salin tidak tersedia di browser ini.");
+      await navigator.clipboard.writeText(formatCatalogShare(visibleProducts, {
+        query: catalogQuery,
+        category: selectedCategory,
+        origin: selectedOrigin,
+        sortField: catalogSortField,
+        sortDirection: catalogSortDirection,
+      }));
+      setCatalogShareNotice("Daftar katalog disalin. Silakan tempel untuk membagikan.");
+    } catch (caught) {
+      setCatalogShareNotice(caught instanceof Error ? caught.message : "Daftar katalog tidak dapat disalin.");
+    }
+  }
 
   function toggleCompare(productId: string) {
     setCompareProductIds((current) => toggleCompareSelection(current, productId));
@@ -280,6 +298,10 @@ export default function App() {
             <div className="catalog-results-toolbar">
               <p className="catalog-result-count" role="status" aria-live="polite"><strong>{visibleProducts.length}</strong> dari {products.length} produk</p>
               <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
+              <div className="catalog-share-actions">
+                <button className="catalog-share-button" type="button" onClick={() => void copyCatalogResults()} disabled={visibleProducts.length === 0}>Salin hasil</button>
+                {catalogShareNotice && <span className="catalog-share-notice" role="status" aria-live="polite">{catalogShareNotice}</span>}
+              </div>
             </div>
             {visibleProducts.length === 0 ? (
               <div className="catalog-empty-state" role="status">
