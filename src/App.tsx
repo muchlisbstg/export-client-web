@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getCategories, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getCategories, getDifferingComparisonFields, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 
 type Product = {
@@ -67,6 +67,7 @@ export default function App() {
   const categories = getCategories(products);
   const hasActiveCatalogFilters = Boolean(catalogQuery.trim()) || selectedCategory !== "";
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
+  const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
 
   function toggleCompare(productId: string) {
     setCompareProductIds((current) => toggleCompareSelection(current, productId));
@@ -266,7 +267,7 @@ export default function App() {
             )}
             {compareProductIds.length > 0 && <section className="catalog-compare-panel" aria-label="Perbandingan produk">
               <div className="catalog-compare-heading"><div><h3>Perbandingan produk</h3><p role="status" aria-live="polite">{comparedProducts.length} dari {MAX_COMPARE_PRODUCTS} dipilih · atribut dari katalog API</p></div><button type="button" onClick={() => setCompareProductIds([])}>Hapus semua</button></div>
-              {comparedProducts.length < 2 ? <p className="catalog-compare-hint">Pilih setidaknya satu produk lagi untuk membandingkan detail.</p> : <div className="catalog-compare-table-wrap"><table className="catalog-compare-table"><thead><tr><th scope="col">Detail</th>{comparedProducts.map((product) => <th scope="col" key={product.id}><span>{product.name}</span><button type="button" aria-label={`Hapus ${product.name} dari perbandingan`} onClick={() => toggleCompare(product.id)}>×</button></th>)}</tr></thead><tbody><tr><th scope="row">Kategori</th>{comparedProducts.map((product) => <td key={product.id}>{product.category}</td>)}</tr><tr><th scope="row">Asal</th>{comparedProducts.map((product) => <td key={product.id}>{product.origin}</td>)}</tr><tr><th scope="row">Satuan</th>{comparedProducts.map((product) => <td key={product.id}>{product.unit}</td>)}</tr></tbody></table></div>}
+              {comparedProducts.length < 2 ? <p className="catalog-compare-hint">Pilih setidaknya satu produk lagi untuk membandingkan detail.</p> : <div className="catalog-compare-table-wrap"><table className="catalog-compare-table"><thead><tr><th scope="col">Detail</th>{comparedProducts.map((product) => <th scope="col" key={product.id}><span>{product.name}</span><button type="button" aria-label={`Hapus ${product.name} dari perbandingan`} onClick={() => toggleCompare(product.id)}>×</button></th>)}</tr></thead><tbody><tr><th scope="row">Kategori</th>{comparedProducts.map((product) => <td key={product.id} className={differingComparisonFields.includes("category") ? "is-different" : undefined}>{differingComparisonFields.includes("category") && <span className="catalog-compare-difference">Berbeda</span>}{product.category}</td>)}</tr><tr><th scope="row">Asal</th>{comparedProducts.map((product) => <td key={product.id} className={differingComparisonFields.includes("origin") ? "is-different" : undefined}>{differingComparisonFields.includes("origin") && <span className="catalog-compare-difference">Berbeda</span>}{product.origin}</td>)}</tr><tr><th scope="row">Satuan</th>{comparedProducts.map((product) => <td key={product.id} className={differingComparisonFields.includes("unit") ? "is-different" : undefined}>{differingComparisonFields.includes("unit") && <span className="catalog-compare-difference">Berbeda</span>}{product.unit}</td>)}</tr></tbody></table></div>}
             </section>}
           </>
         )}
