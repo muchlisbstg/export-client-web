@@ -4,6 +4,7 @@ import { validateInquiryField, validateInquiryForm, type InquiryField, type Inqu
 import { formatCatalogShare } from "./catalog-share";
 import { filterOutComparedProducts } from "./catalog";
 import { formatCatalogCsv } from "./catalog-csv";
+import { buildCatalogShareUrl, parseCatalogShareState } from "./catalog-share-link";
 
 type Product = {
   id: string;
@@ -38,20 +39,21 @@ const initialForm = {
 };
 
 export default function App() {
+  const [initialCatalogShareState] = useState(() => parseCatalogShareState(typeof window === "undefined" ? "" : window.location.search));
   const [products, setProducts] = useState<Product[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncStatusLoading, setSyncStatusLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
-  const [catalogQuery, setCatalogQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedOrigin, setSelectedOrigin] = useState("");
-  const [selectedUnit, setSelectedUnit] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState(initialCatalogShareState.query);
+  const [selectedCategory, setSelectedCategory] = useState(initialCatalogShareState.category);
+  const [selectedOrigin, setSelectedOrigin] = useState(initialCatalogShareState.origin);
+  const [selectedUnit, setSelectedUnit] = useState(initialCatalogShareState.unit);
   const [catalogShareNotice, setCatalogShareNotice] = useState("");
   const [catalogCsvNotice, setCatalogCsvNotice] = useState("");
   const [comparisonShareNotice, setComparisonShareNotice] = useState("");
   const [comparisonCsvNotice, setComparisonCsvNotice] = useState("");
-  const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
-  const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("asc");
+  const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>(initialCatalogShareState.sortField);
+  const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>(initialCatalogShareState.sortDirection);
   const [compareProductIds, setCompareProductIds] = useState<string[]>([]);
   const [hideComparedProducts, setHideComparedProducts] = useState(false);
   const [showOnlyDifferences, setShowOnlyDifferences] = useState(false);
@@ -133,6 +135,23 @@ export default function App() {
       setCatalogShareNotice("Daftar katalog disalin. Silakan tempel untuk membagikan.");
     } catch (caught) {
       setCatalogShareNotice(caught instanceof Error ? caught.message : "Daftar katalog tidak dapat disalin.");
+    }
+  }
+
+  async function copyCatalogLink() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Fitur salin tidak tersedia di browser ini.");
+      await navigator.clipboard.writeText(buildCatalogShareUrl(window.location.href, {
+        query: catalogQuery,
+        category: selectedCategory,
+        origin: selectedOrigin,
+        unit: selectedUnit,
+        sortField: catalogSortField,
+        sortDirection: catalogSortDirection,
+      }));
+      setCatalogShareNotice("Tautan katalog disalin; filter dan urutan akan dipulihkan saat dibuka.");
+    } catch (caught) {
+      setCatalogShareNotice(caught instanceof Error ? caught.message : "Tautan katalog tidak dapat disalin.");
     }
   }
 
@@ -417,6 +436,7 @@ export default function App() {
               <span className="catalog-compare-count" role="status" aria-live="polite">Pembanding: {comparedProducts.length}/{MAX_COMPARE_PRODUCTS}</span>
               <button className={`catalog-hide-compared${hideComparedProducts ? " is-active" : ""}`} type="button" aria-pressed={hideComparedProducts} disabled={comparedProducts.length === 0 && !hideComparedProducts} onClick={() => setHideComparedProducts((current) => !current)}>{hideComparedProducts ? "Tampilkan yang dibandingkan" : "Sembunyikan yang dibandingkan"}</button>
               <div className="catalog-share-actions">
+                <button className="catalog-share-button" type="button" onClick={() => void copyCatalogLink()} aria-label="Salin tautan katalog dengan filter dan urutan saat ini">Salin tautan</button>
                 <button className="catalog-share-button" type="button" onClick={() => void copyCatalogResults()} disabled={visibleProducts.length === 0}>Salin hasil</button>
                 <button className="catalog-share-button" type="button" onClick={downloadCatalogCsv} disabled={visibleProducts.length === 0} aria-label="Unduh hasil katalog yang sedang ditampilkan sebagai CSV">Unduh CSV</button>
                 {catalogShareNotice && <span className="catalog-share-notice" role="status" aria-live="polite">{catalogShareNotice}</span>}
