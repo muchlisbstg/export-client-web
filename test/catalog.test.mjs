@@ -23,6 +23,13 @@ test("search ignores letter case, surrounding whitespace, and Unicode accents", 
   assert.deepEqual(filterProducts(products, "cote d'ivoire").map((item) => item.id), ["cafe"]);
 });
 
+test("multi-word search matches every term in any order across product attributes", () => {
+  assert.deepEqual(filterProducts(products, "KG Indonesia arabika").map((item) => item.id), ["coffee"]);
+  assert.deepEqual(filterProducts(products, "ivoire cafe").map((item) => item.id), ["cafe"]);
+  assert.deepEqual(filterProducts(products, "Indonesia ekuador"), []);
+  assert.deepEqual(filterProducts(products, "   ").map((item) => item.id), products.map((item) => item.id));
+});
+
 test("categories are unique, dynamic, and alphabetically sorted", () => {
   const extended = [...products, { ...products[0], id: "coffee-2" }, { ...products[0], category: "Biji", id: "new" }];
   assert.deepEqual(getCategories(extended), ["Biji", "Cafe", "Kakao", "Kopi", "Rempah"]);
