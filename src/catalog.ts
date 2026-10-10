@@ -104,13 +104,14 @@ export function filterProducts<T extends CatalogProduct>(
   selectedOrigin = "",
   selectedUnit = "",
 ): T[] {
-  const normalizedQuery = normalizeForSearch(query);
+  const queryTerms = normalizeForSearch(query).split(/\s+/u).filter(Boolean);
   return products.filter((product) => {
     const matchesCategory = selectedCategory === "" || product.category === selectedCategory;
     const matchesOrigin = selectedOrigin === "" || product.origin === selectedOrigin;
     const matchesUnit = selectedUnit === "" || product.unit === selectedUnit;
     const searchableText = normalizeForSearch([product.name, product.category, product.origin, product.unit].filter(Boolean).join(" "));
-    return matchesCategory && matchesOrigin && matchesUnit && (!normalizedQuery || searchableText.includes(normalizedQuery));
+    const matchesQuery = queryTerms.every((term) => searchableText.includes(term));
+    return matchesCategory && matchesOrigin && matchesUnit && matchesQuery;
   });
 }
 
