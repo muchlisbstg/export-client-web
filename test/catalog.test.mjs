@@ -9,10 +9,12 @@ const products = [
   { id: "cafe", name: "Café au lait", category: "Cafe", origin: "Côte d'Ivoire", unit: "kg" },
 ];
 
-test("search matches product name, category, and origin", () => {
+test("search matches product name, category, origin, and unit", () => {
   assert.deepEqual(filterProducts(products, "arabika").map((item) => item.id), ["coffee"]);
   assert.deepEqual(filterProducts(products, "rempah").map((item) => item.id), ["vanilla"]);
   assert.deepEqual(filterProducts(products, "ekuador").map((item) => item.id), ["cocoa"]);
+  const mixedUnits = [...products, { ...products[0], id: "coffee-bag", unit: "bag" }];
+  assert.deepEqual(filterProducts(mixedUnits, "bag").map((item) => item.id), ["coffee-bag"]);
 });
 
 test("search ignores letter case, surrounding whitespace, and Unicode accents", () => {

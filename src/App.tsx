@@ -357,13 +357,13 @@ export default function App() {
               <div className="catalog-search-row">
                 <label className="catalog-search">
                   <span className="catalog-search-icon" aria-hidden="true">⌕</span>
-                  <span className="sr-only">Cari nama, kategori, atau asal</span>
+                  <span className="sr-only">Cari nama, kategori, asal, atau satuan</span>
                   <input
                     ref={catalogSearchRef}
                     type="search"
                     value={catalogQuery}
                     onChange={(event) => setCatalogQuery(event.target.value)}
-                    placeholder="Cari nama, kategori, atau asal…"
+                    placeholder="Cari nama, kategori, asal, atau satuan…"
                     autoComplete="off"
                   />
                   {catalogQuery && <button type="button" aria-label="Hapus teks pencarian" onClick={() => { setCatalogQuery(""); catalogSearchRef.current?.focus(); }}>×</button>}
