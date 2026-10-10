@@ -64,6 +64,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [trackingCode, setTrackingCode] = useState("");
+  const [trackingCodeNotice, setTrackingCodeNotice] = useState("");
   const [trackingInput, setTrackingInput] = useState("");
   const [trackedInquiry, setTrackedInquiry] = useState<InquiryStatus | null>(null);
 
@@ -120,6 +121,16 @@ export default function App() {
   const comparedProducts = products.filter((product) => compareProductIds.includes(product.id));
   const differingComparisonFields = getDifferingComparisonFields(comparedProducts);
   const visibleComparisonFields = getComparisonFieldsToDisplay(comparedProducts, showOnlyDifferences);
+
+  async function copyTrackingCode() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Fitur salin tidak tersedia di browser ini.");
+      await navigator.clipboard.writeText(trackingCode);
+      setTrackingCodeNotice("Kode pelacakan berhasil disalin.");
+    } catch (caught) {
+      setTrackingCodeNotice(caught instanceof Error ? caught.message : "Kode pelacakan tidak dapat disalin.");
+    }
+  }
 
   async function copyCatalogResults() {
     try {
@@ -265,6 +276,7 @@ export default function App() {
         throw new Error(result.error === "product_not_found" ? "Produk tidak ditemukan." : "Periksa kembali data permintaan.");
       }
       setTrackingCode(result.trackingCode);
+      setTrackingCodeNotice("");
       setTrackingInput(result.trackingCode);
       setForm((current) => ({ ...initialForm, productId: current.productId }));
       setFieldErrors({});
@@ -495,7 +507,7 @@ export default function App() {
             <label className="full-width" htmlFor="rfq-quantity">Jumlah (kg)<input id="rfq-quantity" required type="number" min="0" max="1000000" step="any" value={form.quantity} onChange={(event) => updateInquiryField("quantity", event.target.value)} aria-invalid={Boolean(fieldErrors.quantity)} aria-describedby={fieldErrors.quantity ? "rfq-quantity-error" : undefined} />{fieldErrors.quantity && <span className="field-error" id="rfq-quantity-error" aria-live="polite">{fieldErrors.quantity}</span>}</label>
             <button className="primary-button full-width" type="submit" disabled={submitting || loading || products.length === 0}>{submitting ? "Mengirim…" : "Kirim permintaan"}<span aria-hidden="true">↗</span></button>
           </form>
-          {trackingCode && <div className="success-box" role="status"><strong>Permintaan tersimpan.</strong><span>Kode pelacakan Anda (simpan untuk digunakan di web, mobile, atau desktop yang tersinkron):</span><code>{trackingCode}</code></div>}
+          {trackingCode && <div className="success-box" role="status"><strong>Permintaan tersimpan.</strong><span>Kode pelacakan Anda (simpan untuk digunakan di web, mobile, atau desktop yang tersinkron):</span><code>{trackingCode}</code><div className="tracking-code-actions"><button className="copy-tracking-code" type="button" onClick={() => void copyTrackingCode()} aria-label="Salin kode pelacakan">Salin kode</button><span className="tracking-code-notice" aria-live="polite">{trackingCodeNotice}</span></div></div>}
         </div>
 
         <div className="tracking-panel">
