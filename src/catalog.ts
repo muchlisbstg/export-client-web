@@ -109,7 +109,7 @@ export function filterProducts<T extends CatalogProduct>(
     const matchesCategory = selectedCategory === "" || product.category === selectedCategory;
     const matchesOrigin = selectedOrigin === "" || product.origin === selectedOrigin;
     const matchesUnit = selectedUnit === "" || product.unit === selectedUnit;
-    const searchableText = normalizeForSearch(`${product.name} ${product.category} ${product.origin}`);
+    const searchableText = normalizeForSearch([product.name, product.category, product.origin, product.unit].filter(Boolean).join(" "));
     return matchesCategory && matchesOrigin && matchesUnit && (!normalizedQuery || searchableText.includes(normalizedQuery));
   });
 }
