@@ -13,6 +13,14 @@ type Product = {
   unit: string;
 };
 
+type SyncStatus = {
+  enabled: boolean;
+  peerCount: number;
+  pendingDeliveries: number;
+  retryingDeliveries: number;
+  conflicts: number;
+};
+
 type InquiryStatus = {
   status: string;
   createdAt: string;
@@ -31,6 +39,8 @@ const initialForm = {
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncStatusLoading, setSyncStatusLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -72,8 +82,24 @@ export default function App() {
     }
   }
 
+  async function refreshSyncStatus() {
+    setSyncStatusLoading(true);
+    try {
+      const response = await fetch("/health", { cache: "no-store" });
+      if (!response.ok) throw new Error("Sync status unavailable");
+      const result = (await response.json()) as { syncStatus?: SyncStatus };
+      if (!result.syncStatus || typeof result.syncStatus.enabled !== "boolean") throw new Error("Invalid sync status");
+      setSyncStatus(result.syncStatus);
+    } catch {
+      setSyncStatus(null);
+    } finally {
+      setSyncStatusLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadProducts();
+    void refreshSyncStatus();
   }, []);
 
   const matchingProducts = sortProducts(filterProducts(products, catalogQuery, selectedCategory, selectedOrigin, selectedUnit), catalogSortField, catalogSortDirection);
@@ -223,6 +249,7 @@ export default function App() {
       setTrackingInput(result.trackingCode);
       setForm((current) => ({ ...initialForm, productId: current.productId }));
       setFieldErrors({});
+      void refreshSyncStatus();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Permintaan gagal dikirim.");
     } finally {
@@ -271,6 +298,16 @@ export default function App() {
           <div className="hero-seal"><span>EC</span></div>
           <div className="hero-card-footer"><span>INDONESIA<br /><small>ORIGIN MARKET</small></span><span className="seal-line" /><span>EXPORT<br /><small>CLIENT PORTAL</small></span></div>
         </div>
+      </section>
+
+      <section className="sync-status-summary" aria-label="Status sinkronisasi peer-to-peer" role="status" aria-live="polite">
+        <div>
+          <p className="eyebrow">SINKRONISASI PEER-TO-PEER</p>
+          <strong>{syncStatusLoading ? "Memeriksa status…" : !syncStatus ? "Status belum tersedia" : !syncStatus.enabled ? "Tidak diaktifkan" : syncStatus.peerCount > 0 ? `Diaktifkan · ${syncStatus.peerCount} peer dikonfigurasi` : "Diaktifkan · belum ada peer"}</strong>
+          <p>{syncStatus ? `Antrean: ${syncStatus.pendingDeliveries} · Perlu coba ulang: ${syncStatus.retryingDeliveries} · Konflik: ${syncStatus.conflicts}` : "Ringkasan lokal; koneksi peer tidak diuji langsung."}</p>
+          {syncStatus && <small>Ringkasan lokal; koneksi peer tidak diuji langsung.</small>}
+        </div>
+        <button type="button" onClick={() => void refreshSyncStatus()} disabled={syncStatusLoading}>Perbarui status</button>
       </section>
 
       <section className="section" id="catalog">

@@ -88,7 +88,16 @@ const syncInquiryInput = z.object({
 
 app.get("/health", (_request, response) => {
   db.prepare("SELECT 1").get();
-  response.json({ status: "ok", nodeId, syncEnabled: sync.syncEnabled });
+  const pendingDeliveries = (db.prepare("SELECT COUNT(*) AS count FROM sync_outbox").get() as { count: number }).count;
+  const retryingDeliveries = (db.prepare("SELECT COUNT(*) AS count FROM sync_outbox WHERE last_error IS NOT NULL").get() as { count: number }).count;
+  const conflicts = (db.prepare("SELECT COUNT(*) AS count FROM sync_conflicts").get() as { count: number }).count;
+  response.setHeader("Cache-Control", "no-store");
+  response.json({
+    status: "ok",
+    nodeId,
+    syncEnabled: sync.syncEnabled,
+    syncStatus: { enabled: sync.syncEnabled, peerCount: peers.length, pendingDeliveries, retryingDeliveries, conflicts },
+  });
 });
 
 app.get("/api/v1/products", (_request, response) => {

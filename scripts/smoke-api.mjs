@@ -129,8 +129,10 @@ try {
   assert.equal(healthA.status, "ok");
   assert.equal(healthA.nodeId, "web-a");
   assert.equal(healthA.syncEnabled, true);
+  assert.deepEqual(healthA.syncStatus, { enabled: true, peerCount: 1, pendingDeliveries: 0, retryingDeliveries: 0, conflicts: 0 });
   assert.equal(healthB.syncEnabled, true);
   assert.equal(healthC.syncEnabled, false);
+  assert.equal(healthC.syncStatus.enabled, false);
 
   const malformedJson = await fetch(`${nodeA.base}/api/v1/inquiries`, {
     method: "POST",
@@ -247,6 +249,9 @@ try {
   targetDb.close();
   assert.equal(storedName, "Sample Client", "conflict must never overwrite the original record");
   assert.equal(conflictCount, 1);
+  const conflictStatus = await (await fetch(`${nodeB.base}/health`)).json();
+  assert.equal(conflictStatus.syncStatus.conflicts, 1);
+  assert.equal(conflictStatus.syncStatus.pendingDeliveries, 0);
 
   const collisionId = "33333333-3333-4333-8333-333333333333";
   const codeCollisionResponse = await fetch(`${nodeB.base}/api/v1/sync/inquiries`, {
@@ -262,6 +267,8 @@ try {
   collisionDb.close();
   assert.equal(collision.reason, "tracking_code_collision");
   assert.equal(preservedName, "Sample Client", "tracking-code collision must not overwrite the original record");
+  const collisionStatus = await (await fetch(`${nodeB.base}/health`)).json();
+  assert.equal(collisionStatus.syncStatus.conflicts, 2);
 
   const invalidCodeResponse = await fetch(`${nodeA.base}/api/v1/inquiries/not-a-code`);
   assert.equal(invalidCodeResponse.status, 400);
@@ -346,6 +353,10 @@ try {
     "a persisted failed attempt",
   );
   assert.ok(failedAttempt.attemptCount >= 1);
+  const pendingStatus = await (await fetch(`${recoverySource.base}/health`)).json();
+  assert.deepEqual(pendingStatus.syncStatus, { enabled: true, peerCount: 1, pendingDeliveries: 1, retryingDeliveries: 1, conflicts: 0 });
+  assert.equal("peerUrl" in pendingStatus.syncStatus, false);
+  assert.equal("lastError" in pendingStatus.syncStatus, false);
   await stopNode(recoverySource);
 
   const recoveryTarget = startNode({
@@ -366,6 +377,9 @@ try {
   await waitForHealth(restartedSource);
   const recoveredTracking = await waitForTracking(recoveryTarget, offlineCreated.trackingCode);
   assert.equal(recoveredTracking.data.productName, products[0].name);
+  const recoveredStatus = await (await fetch(`${restartedSource.base}/health`)).json();
+  assert.equal(recoveredStatus.syncStatus.pendingDeliveries, 0);
+  assert.equal(recoveredStatus.syncStatus.retryingDeliveries, 0);
   await waitForOutboxState(
     recoverySourceDbPath,
     sourceRecord.id,
