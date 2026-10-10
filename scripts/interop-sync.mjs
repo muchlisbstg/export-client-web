@@ -94,7 +94,12 @@ async function waitForHealth(node) {
       const response = await fetch(`${node.base}/health`, { signal: AbortSignal.timeout(1_000) });
       if (response.ok) {
         const health = await response.json();
-        assert.deepEqual(health, { status: "ok", nodeId: nodeIds.web, syncEnabled: true });
+        assert.deepEqual(health, {
+          status: "ok",
+          nodeId: nodeIds.web,
+          syncEnabled: true,
+          syncStatus: { enabled: true, peerCount: 2, pendingDeliveries: 0, retryingDeliveries: 0, conflicts: 0 },
+        });
         return;
       }
     } catch {
