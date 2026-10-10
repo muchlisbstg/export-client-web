@@ -3,6 +3,7 @@ import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategor
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 import { formatCatalogShare } from "./catalog-share";
 import { filterOutComparedProducts } from "./catalog";
+import { formatCatalogCsv } from "./catalog-csv";
 
 type Product = {
   id: string;
@@ -36,6 +37,7 @@ export default function App() {
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
   const [catalogShareNotice, setCatalogShareNotice] = useState("");
+  const [catalogCsvNotice, setCatalogCsvNotice] = useState("");
   const [comparisonShareNotice, setComparisonShareNotice] = useState("");
   const [comparisonCsvNotice, setComparisonCsvNotice] = useState("");
   const [catalogSortField, setCatalogSortField] = useState<CatalogSortField>("default");
@@ -105,6 +107,25 @@ export default function App() {
       setCatalogShareNotice("Daftar katalog disalin. Silakan tempel untuk membagikan.");
     } catch (caught) {
       setCatalogShareNotice(caught instanceof Error ? caught.message : "Daftar katalog tidak dapat disalin.");
+    }
+  }
+
+  function downloadCatalogCsv() {
+    try {
+      const csv = formatCatalogCsv(visibleProducts);
+      if (!csv) throw new Error("Tidak ada hasil katalog untuk diunduh.");
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "katalog-ekspor.csv";
+      link.style.display = "none";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setCatalogCsvNotice("Unduhan CSV katalog dimulai.");
+    } catch (caught) {
+      setCatalogCsvNotice(caught instanceof Error ? caught.message : "CSV katalog tidak dapat diunduh.");
     }
   }
 
@@ -360,7 +381,9 @@ export default function App() {
               <button className={`catalog-hide-compared${hideComparedProducts ? " is-active" : ""}`} type="button" aria-pressed={hideComparedProducts} disabled={comparedProducts.length === 0 && !hideComparedProducts} onClick={() => setHideComparedProducts((current) => !current)}>{hideComparedProducts ? "Tampilkan yang dibandingkan" : "Sembunyikan yang dibandingkan"}</button>
               <div className="catalog-share-actions">
                 <button className="catalog-share-button" type="button" onClick={() => void copyCatalogResults()} disabled={visibleProducts.length === 0}>Salin hasil</button>
+                <button className="catalog-share-button" type="button" onClick={downloadCatalogCsv} disabled={visibleProducts.length === 0} aria-label="Unduh hasil katalog yang sedang ditampilkan sebagai CSV">Unduh CSV</button>
                 {catalogShareNotice && <span className="catalog-share-notice" role="status" aria-live="polite">{catalogShareNotice}</span>}
+                {catalogCsvNotice && <span className="catalog-share-notice" role="status" aria-live="polite">{catalogCsvNotice}</span>}
               </div>
             </div>
             {visibleProducts.length === 0 ? (
