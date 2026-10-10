@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getUnits, formatComparisonCsv, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
+import { catalogSortOptions, filterProducts, getActiveCatalogFilters, getCatalogSearchHighlightParts, getCategories, getFacetCounts, getOrigins, getUnits, formatComparisonCsv, formatComparisonShare, getDifferingComparisonFields, getComparisonFieldsToDisplay, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS, type CatalogSortDirection, type CatalogSortField } from "./catalog";
 import { validateInquiryField, validateInquiryForm, type InquiryField, type InquiryFieldErrors } from "./rfq-validation";
 import { formatCatalogShare } from "./catalog-share";
 import { filterOutComparedProducts } from "./catalog";
@@ -37,6 +37,13 @@ const initialForm = {
   productId: "",
   quantity: "1000",
 };
+
+function CatalogSearchHighlight({ value, query }: { value: string; query: string }) {
+  const parts = getCatalogSearchHighlightParts(value, query);
+  return <>{parts.map((part, index) => part.matched
+    ? <mark key={index} style={{ backgroundColor: "#f2e7a4", color: "inherit", borderRadius: 2 }}>{part.text}</mark>
+    : <span key={index}>{part.text}</span>)}</>;
+}
 
 export default function App() {
   const [initialCatalogShareState] = useState(() => parseCatalogShareState(typeof window === "undefined" ? "" : window.location.search));
@@ -467,8 +474,8 @@ export default function App() {
                   const index = products.findIndex((item) => item.id === product.id);
                   return (
                     <article className="product-card" key={product.id}>
-                      <div className={`product-art art-${index % 3}`}><span className="product-number">{String(index + 1).padStart(2, "0")}</span><span className="product-stamp">{product.origin}</span></div>
-                      <div className="product-details"><span className="product-category">{product.category}</span><h3>{product.name}</h3><p>Asal {product.origin} <span>·</span> Satuan {product.unit}</p><button className={`compare-toggle${compareProductIds.includes(product.id) ? " is-selected" : ""}`} type="button" aria-pressed={compareProductIds.includes(product.id)} disabled={!compareProductIds.includes(product.id) && compareProductIds.length >= MAX_COMPARE_PRODUCTS} onClick={() => toggleCompare(product.id)}>{compareProductIds.includes(product.id) ? "✓ Ditambahkan" : "Bandingkan"}</button></div>
+                      <div className={`product-art art-${index % 3}`}><span className="product-number">{String(index + 1).padStart(2, "0")}</span><span className="product-stamp"><CatalogSearchHighlight value={product.origin} query={catalogQuery} /></span></div>
+                      <div className="product-details"><span className="product-category"><CatalogSearchHighlight value={product.category} query={catalogQuery} /></span><h3><CatalogSearchHighlight value={product.name} query={catalogQuery} /></h3><p>Asal <CatalogSearchHighlight value={product.origin} query={catalogQuery} /> <span>·</span> Satuan <CatalogSearchHighlight value={product.unit} query={catalogQuery} /></p><button className={`compare-toggle${compareProductIds.includes(product.id) ? " is-selected" : ""}`} type="button" aria-pressed={compareProductIds.includes(product.id)} disabled={!compareProductIds.includes(product.id) && compareProductIds.length >= MAX_COMPARE_PRODUCTS} onClick={() => toggleCompare(product.id)}>{compareProductIds.includes(product.id) ? "✓ Ditambahkan" : "Bandingkan"}</button></div>
                     </article>
                   );
                 })}
