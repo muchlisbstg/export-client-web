@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
+import { filterProducts, getActiveCatalogFilters, getCategories, getFacetCounts, getOrigins, getUnits, sortProducts, toggleCompareSelection, MAX_COMPARE_PRODUCTS } from "../src/catalog.ts";
 
 const products = [
   { id: "coffee", name: "Kopi Arabika", category: "Kopi", origin: "Indonesia", unit: "kg" },
@@ -31,11 +31,19 @@ test("origins are unique, dynamic, and alphabetically sorted", () => {
   assert.deepEqual(getOrigins(extended), ["Bali", "Côte d'Ivoire", "Ekuador", "Indonesia", "Réunion"]);
 });
 
+test("units are unique, dynamic, sorted, and omit missing values", () => {
+  const catalog = [...products, { ...products[0], id: "coffee-bag", unit: "bag" }, { ...products[0], id: "missing-unit", unit: "" }];
+  assert.deepEqual(getUnits(catalog), ["bag", "kg"]);
+});
+
 test("facet counts reflect the other active filter and omit empty values", () => {
   const categoriesForIndonesia = getFacetCounts(filterProducts(products, "", "", "Indonesia"), "category");
   assert.deepEqual([...categoriesForIndonesia], [["Kopi", 1]]);
   const originsForCoffee = getFacetCounts(filterProducts(products, "", "Kopi"), "origin");
   assert.deepEqual([...originsForCoffee], [["Indonesia", 1]]);
+  const mixedUnits = [...products, { ...products[0], id: "coffee-bag", unit: "bag" }, { ...products[0], id: "missing-unit", unit: "" }];
+  const unitsForCoffee = getFacetCounts(filterProducts(mixedUnits, "", "Kopi"), "unit");
+  assert.deepEqual([...unitsForCoffee], [["kg", 1], ["bag", 1]]);
   const sparse = getFacetCounts([...products, { ...products[0], id: "missing-category", category: "" }], "category");
   assert.equal(sparse.has(""), false);
 });
@@ -48,6 +56,11 @@ test("text and category filters combine with AND", () => {
 test("text, category, and origin filters combine with AND", () => {
   assert.deepEqual(filterProducts(products, "kopi", "Kopi", "Indonesia").map((item) => item.id), ["coffee"]);
   assert.deepEqual(filterProducts(products, "", "Kopi", "Ekuador"), []);
+});
+
+test("text, category, origin, and unit filters combine with AND", () => {
+  assert.deepEqual(filterProducts(products, "kopi", "Kopi", "Indonesia", "kg").map((item) => item.id), ["coffee"]);
+  assert.deepEqual(filterProducts(products, "kopi", "Kopi", "Indonesia", "bag"), []);
 });
 
 test("an API category named all remains a real, filterable category", () => {
@@ -76,11 +89,12 @@ test("filtering returns a new result without mutating the source array", () => {
   assert.deepEqual(products.map((item) => item.id), originalOrder);
 });
 
-test("active filter summary trims search and preserves the search-category-origin order", () => {
-  assert.deepEqual(getActiveCatalogFilters("  kopi  ", "Kopi", "Indonesia"), [
+test("active filter summary trims search and preserves the search-category-origin-unit order", () => {
+  assert.deepEqual(getActiveCatalogFilters("  kopi  ", "Kopi", "Indonesia", "kg"), [
     { key: "search", value: "kopi" },
     { key: "category", value: "Kopi" },
     { key: "origin", value: "Indonesia" },
+    { key: "unit", value: "kg" },
   ]);
   assert.deepEqual(getActiveCatalogFilters("   ", "", ""), []);
 });
